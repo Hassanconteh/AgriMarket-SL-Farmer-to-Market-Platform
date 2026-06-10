@@ -3,38 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriMarket SL - Farmer-to-Market Platform</title>
+    <title>AgriMarket SL | Empowering Farmers</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <header class="navbar">
-        <div class="logo">AgriMarket SL 🌾</div>
+        <div class="logo"><i class="fa-solid fa-leaf"></i> AgriMarket SL</div>
         <nav>
-            <a href="#market">Market</a>
+            <a href="#market" class="active">Market</a>
             <a href="#weather">Weather</a>
-            <a href="#profile">Profile</a>
+            <a href="#login" class="btn-outline">Log In</a>
         </nav>
     </header>
 
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Connecting Sierra Leone's Farmers to the World</h1>
+            <p>Direct access to fresh produce. Fair prices. Transparent markets.</p>
+        </div>
+    </section>
+
     <main class="container">
         <section class="search-bar">
-            <input type="text" id="searchInput" placeholder="Search for Rice, Cassava, Cocoa...">
-            <select id="locationFilter">
-                <option value="All">All Regions</option>
-                <option value="Bo">Bo</option>
-                <option value="Kenema">Kenema</option>
-                <option value="Makeni">Makeni</option>
-                <option value="Western Area">Western Area</option>
-            </select>
-            <button id="searchBtn">Find Crops</button>
+            <div class="input-group">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="searchInput" placeholder="Search for Rice, Cocoa, Cassava...">
+            </div>
+            <div class="input-group">
+                <i class="fa-solid fa-location-dot"></i>
+                <select id="locationFilter">
+                    <option value="All">All Regions</option>
+                    <option value="Bo">Bo</option>
+                    <option value="Kenema">Kenema</option>
+                    <option value="Makeni">Makeni</option>
+                    <option value="Western Area">Western Area</option>
+                </select>
+            </div>
+            <button id="searchBtn">Filter Market</button>
         </section>
 
         <section class="listings">
-            <h2>Current Market Listings</h2>
+            <div class="section-header">
+                <h2>Fresh Listings</h2>
+                <span id="resultCount" class="text-muted">Loading...</span>
+            </div>
             <div id="cropCardsContainer" class="grid">
                 </div>
         </section>
     </main>
+
+    <div id="toastContainer" class="toast-container"></div>
 
     <script src="app.js"></script>
 </body>
