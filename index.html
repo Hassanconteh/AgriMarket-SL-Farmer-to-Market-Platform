@@ -9,51 +9,104 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <header class="navbar">
+    <!-- Navigation -->
+    <header class="navbar float-in" style="animation-delay: 0.1s;">
         <div class="logo"><i class="fa-solid fa-leaf"></i> AgriMarket SL</div>
-        <nav>
+        <nav id="nav-links">
             <a href="#market" class="active">Market</a>
             <a href="#weather">Weather</a>
-            <a href="#login" class="btn-outline">Log In</a>
+            <button id="navLoginBtn" class="btn-outline">Log In</button>
         </nav>
     </header>
 
-    <section class="hero">
-        <div class="hero-content">
-            <h1>Connecting Sierra Leone's Farmers to the World</h1>
-            <p>Direct access to fresh produce. Fair prices. Transparent markets.</p>
-        </div>
-    </section>
-
-    <main class="container">
-        <section class="search-bar">
-            <div class="input-group">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="searchInput" placeholder="Search for Rice, Cocoa, Cassava...">
+    <!-- Main Content Wrapped for Animation -->
+    <div id="mainContent" class="float-in" style="animation-delay: 0.3s;">
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <h1>Connecting Sierra Leone's Farmers to the World</h1>
+                <p>Direct access to fresh produce. Fair prices. Transparent markets.</p>
             </div>
-            <div class="input-group">
-                <i class="fa-solid fa-location-dot"></i>
-                <select id="locationFilter">
-                    <option value="All">All Regions</option>
-                    <option value="Bo">Bo</option>
-                    <option value="Kenema">Kenema</option>
-                    <option value="Makeni">Makeni</option>
-                    <option value="Western Area">Western Area</option>
-                </select>
-            </div>
-            <button id="searchBtn">Filter Market</button>
         </section>
 
-        <section class="listings">
-            <div class="section-header">
-                <h2>Fresh Listings</h2>
-                <span id="resultCount" class="text-muted">Loading...</span>
-            </div>
-            <div id="cropCardsContainer" class="grid">
+        <!-- Main Container -->
+        <main class="container">
+            <!-- Search and Filter -->
+            <section class="search-bar">
+                <div class="input-group">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="searchInput" placeholder="Search for Rice, Cocoa, Cassava...">
                 </div>
-        </section>
-    </main>
+                <div class="input-group">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <select id="locationFilter">
+                        <option value="All">All Regions</option>
+                        <option value="Bo">Bo</option>
+                        <option value="Kenema">Kenema</option>
+                        <option value="Makeni">Makeni</option>
+                        <option value="Western Area">Western Area</option>
+                    </select>
+                </div>
+                <button id="searchBtn" class="btn-blue">Filter Market</button>
+            </section>
 
+            <!-- Dynamic Listings Container -->
+            <section class="listings">
+                <div class="section-header">
+                    <h2>Fresh Listings</h2>
+                    <span id="resultCount" class="text-muted">Loading...</span>
+                </div>
+                <div id="cropCardsContainer" class="grid">
+                    <!-- Cards injected here -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Auth Modal (Hidden by default) -->
+    <div id="authModal" class="modal-overlay">
+        <div class="modal-content float-in">
+            <button class="close-btn" id="closeModal"><i class="fa-solid fa-xmark"></i></button>
+            
+            <!-- Modal Tabs -->
+            <div class="auth-tabs">
+                <button class="tab-btn active" id="tabLogin">Sign In</button>
+                <button class="tab-btn" id="tabRegister">Create Account</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form active">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="loginEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <button type="submit" class="btn-full btn-blue">Sign In</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="registerForm" class="auth-form">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="regName" required>
+                </div>
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="regEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="regPassword" required>
+                </div>
+                <button type="submit" class="btn-full btn-green">Create Account</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="app.js"></script>
