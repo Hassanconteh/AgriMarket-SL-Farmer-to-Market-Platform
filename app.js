@@ -1,141 +1,144 @@
-// --- 1. Mock Data Integration ---
+// --- 1. Database Initialization ---
 const mockData = [
     { id: 1, crop: "Premium Milled Rice", category: "Grains", farmer: "Musa Kamara", location: "Makeni", price: "450", unit: "50kg bag", image: "https://images.unsplash.com/photo-1586201375761-83865001e8ac?auto=format&fit=crop&w=500&q=80", date: "Today", phone: "077xxxxxx" },
     { id: 2, crop: "Fresh Cassava Tubers", category: "Root Crop", farmer: "Fatmata Sesay", location: "Bo", price: "150", unit: "dozen", image: "https://images.unsplash.com/photo-1596482161271-9b7e70417dd1?auto=format&fit=crop&w=500&q=80", date: "Yesterday", phone: "076xxxxxx" },
     { id: 3, crop: "Grade A Cocoa Beans", category: "Export Crop", farmer: "Aminata Turay", location: "Kenema", price: "800", unit: "bag", image: "https://images.unsplash.com/photo-1611079815049-58b8772a08c5?auto=format&fit=crop&w=500&q=80", date: "2 days ago", phone: "079xxxxxx" }
 ];
 
-if (!localStorage.getItem('agriMarketData_v2')) {
-    localStorage.setItem('agriMarketData_v2', JSON.stringify(mockData));
+if (!localStorage.getItem('agriMarketData_v2')) localStorage.setItem('agriMarketData_v2', JSON.stringify(mockData));
+if (!localStorage.getItem('agriUsers')) localStorage.setItem('agriUsers', JSON.stringify([]));
+
+
+// --- 2. View Management (The "Auth Gate") ---
+const landingPage = document.getElementById('landingPage');
+const dashboardApp = document.getElementById('dashboardApp');
+const navMenu = document.getElementById('navMenu');
+
+function checkAuthState() {
+    const user = JSON.parse(localStorage.getItem('currentUser'));
+
+    if (user) {
+        // User IS logged in: Show Dashboard, Hide Landing
+        landingPage.style.display = 'none';
+        dashboardApp.style.display = 'block';
+        
+        // Populate Navigation for Logged-in User
+        navMenu.innerHTML = `
+            <span class="nav-link"><i class="fa-solid fa-user-check"></i> Hello, ${user.name.split(' ')[0]}</span>
+            <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
+        `;
+        
+        // Attach logout listener
+        document.getElementById('navLogoutBtn').addEventListener('click', handleLogout);
+        
+        // Render data
+        renderListings(JSON.parse(localStorage.getItem('agriMarketData_v2')));
+    } else {
+        // User IS NOT logged in: Show Landing, Hide Dashboard
+        landingPage.style.display = 'flex';
+        dashboardApp.style.display = 'none';
+        
+        // Populate Navigation for Guest
+        navMenu.innerHTML = `
+            <button id="navLoginBtn" class="btn-outline">Log In</button>
+        `;
+        document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
+    }
 }
 
-// Ensure user database array exists
-if (!localStorage.getItem('agriUsers')) {
-    localStorage.setItem('agriUsers', JSON.stringify([]));
+function handleLogout() {
+    localStorage.removeItem('currentUser');
+    triggerToast("You have been securely logged out.");
+    checkAuthState(); // Refresh view back to landing page
 }
 
-// --- 2. Auth Modal Logic ---
+
+// --- 3. Modal & Tab Logic ---
 const authModal = document.getElementById('authModal');
-const navLoginBtn = document.getElementById('navLoginBtn');
-const closeModalBtn = document.getElementById('closeModal');
 const tabLogin = document.getElementById('tabLogin');
 const tabRegister = document.getElementById('tabRegister');
 const loginForm = document.getElementById('loginForm');
 const registerForm = document.getElementById('registerForm');
 
-// Open/Close Modal
-navLoginBtn.addEventListener('click', () => {
-    // If user is already logged in, this button acts as a Logout
-    if (localStorage.getItem('currentUser')) {
-        localStorage.removeItem('currentUser');
-        triggerToast("You have been logged out.");
-        updateNavState();
+function openModal(mode) {
+    authModal.classList.add('active');
+    if (mode === 'register') {
+        tabRegister.click(); // Simulate clicking the register tab
     } else {
-        authModal.classList.add('active');
+        tabLogin.click(); // Simulate clicking the login tab
     }
-});
+}
 
-closeModalBtn.addEventListener('click', () => authModal.classList.remove('active'));
+document.getElementById('btnStartLogin').addEventListener('click', () => openModal('login'));
+document.getElementById('btnStartRegister').addEventListener('click', () => openModal('register'));
+document.getElementById('closeModal').addEventListener('click', () => authModal.classList.remove('active'));
 
-// Switch Tabs
 tabLogin.addEventListener('click', () => {
-    tabLogin.classList.add('active');
-    tabRegister.classList.remove('active');
-    loginForm.classList.add('active');
-    registerForm.classList.remove('active');
+    tabLogin.classList.add('active'); tabRegister.classList.remove('active');
+    loginForm.classList.add('active'); registerForm.classList.remove('active');
 });
 
 tabRegister.addEventListener('click', () => {
-    tabRegister.classList.add('active');
-    tabLogin.classList.remove('active');
-    registerForm.classList.add('active');
-    loginForm.classList.remove('active');
+    tabRegister.classList.add('active'); tabLogin.classList.remove('active');
+    registerForm.classList.add('active'); loginForm.classList.remove('active');
 });
 
-// --- 3. Authentication System ---
 
-// Register User
+// --- 4. Authentication Processing ---
 registerForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const name = document.getElementById('regName').value;
     const email = document.getElementById('regEmail').value;
     const password = document.getElementById('regPassword').value;
-
     const users = JSON.parse(localStorage.getItem('agriUsers'));
 
-    // Check if email exists
     if (users.find(u => u.email === email)) {
-        triggerToast("Email is already registered. Please log in.");
-        return;
+        triggerToast("Email already exists. Try logging in."); return;
     }
 
-    // Save user
     const newUser = { name, email, password };
     users.push(newUser);
     localStorage.setItem('agriUsers', JSON.stringify(users));
+    localStorage.setItem('currentUser', JSON.stringify(newUser)); // Auto-login
     
-    // Auto login
-    localStorage.setItem('currentUser', JSON.stringify(newUser));
-    triggerToast(`Account created! Welcome, ${name}.`);
     authModal.classList.remove('active');
-    updateNavState();
     registerForm.reset();
+    triggerToast(`Account created! Welcome to AgriMarket SL.`);
+    checkAuthState(); // Refresh View
 });
 
-// Login User
 loginForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
-
     const users = JSON.parse(localStorage.getItem('agriUsers'));
     const user = users.find(u => u.email === email && u.password === password);
 
     if (user) {
         localStorage.setItem('currentUser', JSON.stringify(user));
-        triggerToast(`Welcome back, ${user.name}!`);
         authModal.classList.remove('active');
-        updateNavState();
         loginForm.reset();
+        triggerToast(`Welcome back, ${user.name}!`);
+        checkAuthState(); // Refresh View
     } else {
         triggerToast("Invalid email or password.");
     }
 });
 
-// Update Navbar based on Auth State
-function updateNavState() {
-    const user = JSON.parse(localStorage.getItem('currentUser'));
-    if (user) {
-        navLoginBtn.innerText = "Log Out";
-        navLoginBtn.style.color = "var(--sl-green)";
-        navLoginBtn.style.borderColor = "var(--sl-green)";
-        navLoginBtn.innerHTML = `<i class="fa-regular fa-user"></i> ${user.name.split(' ')[0]} (Logout)`;
-    } else {
-        navLoginBtn.innerText = "Log In";
-        navLoginBtn.style.color = "var(--sl-blue)";
-        navLoginBtn.style.borderColor = "var(--sl-blue)";
-    }
-}
 
-// --- 4. Core Render Functions ---
-function getMarketListings() {
-    return JSON.parse(localStorage.getItem('agriMarketData_v2')) || [];
-}
-
+// --- 5. Market Dashboard Logic ---
 const container = document.getElementById('cropCardsContainer');
 const resultCount = document.getElementById('resultCount');
 
 function renderListings(listings) {
     container.innerHTML = ''; 
-    resultCount.innerText = `Showing ${listings.length} result(s)`;
+    resultCount.innerText = `${listings.length} active listing(s)`;
 
-    listings.forEach(item => {
+    listings.forEach((item, index) => {
         const card = document.createElement('div');
-        card.className = 'card float-in'; // Apply float-in to cards too
-        card.style.animationDelay = `${item.id * 0.1}s`; // Staggered animation
+        card.className = 'card float-in'; 
+        card.style.animationDelay = `${index * 0.1}s`; 
         
-        const formattedPrice = `NLE ${item.price} <span style="font-size:0.9rem; color:#64748b; font-weight:400;">/ ${item.unit}</span>`;
-
         card.innerHTML = `
             <img src="${item.image}" alt="${item.crop}" class="card-img">
             <div class="card-content">
@@ -144,13 +147,9 @@ function renderListings(listings) {
                     <span class="badge badge-location"><i class="fa-solid fa-map-pin"></i> ${item.location}</span>
                 </div>
                 <h3 class="card-title">${item.crop}</h3>
-                <span class="card-price">${formattedPrice}</span>
-                <div class="card-details">
-                    <p><i class="fa-regular fa-user"></i> ${item.farmer}</p>
-                    <p><i class="fa-regular fa-clock"></i> Listed ${item.date}</p>
-                </div>
-                <button class="btn-contact" onclick="handleContact('${item.farmer}')">
-                    <i class="fa-regular fa-comment-dots"></i> Contact Farmer
+                <span class="card-price">NLE ${item.price} <span style="font-size:0.9rem; color:#64748b;">/ ${item.unit}</span></span>
+                <button class="btn-contact" onclick="triggerToast('Opening chat with ${item.farmer}...')">
+                    <i class="fa-regular fa-comment-dots"></i> Message Farmer
                 </button>
             </div>
         `;
@@ -158,23 +157,26 @@ function renderListings(listings) {
     });
 }
 
-function handleContact(farmerName) {
-    if (!localStorage.getItem('currentUser')) {
-        triggerToast("Please log in to contact farmers.");
-        authModal.classList.add('active');
-        return;
-    }
-    triggerToast(`Connecting to ${farmerName} via secure SMS...`);
-}
+document.getElementById('searchBtn').addEventListener('click', () => {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const locationFilter = document.getElementById('locationFilter').value;
+    const data = JSON.parse(localStorage.getItem('agriMarketData_v2'));
+    
+    const filtered = data.filter(item => {
+        const matchesSearch = item.crop.toLowerCase().includes(searchTerm);
+        const matchesLocation = locationFilter === "All" || item.location === locationFilter;
+        return matchesSearch && matchesLocation;
+    });
+    renderListings(filtered);
+});
 
+// Helper: UI Notifications
 function triggerToast(message) {
     const toastBox = document.getElementById('toastContainer');
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.innerHTML = message;
-    
+    toast.innerHTML = `<i class="fa-solid fa-circle-info" style="color: #4ade80; margin-right:8px;"></i> ${message}`;
     toastBox.appendChild(toast);
-
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(20px)';
@@ -182,22 +184,5 @@ function triggerToast(message) {
     }, 3000);
 }
 
-// Search Logic
-document.getElementById('searchBtn').addEventListener('click', () => {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    const locationFilter = document.getElementById('locationFilter').value;
-    
-    const filteredData = getMarketListings().filter(item => {
-        const matchesSearch = item.crop.toLowerCase().includes(searchTerm) || item.farmer.toLowerCase().includes(searchTerm);
-        const matchesLocation = locationFilter === "All" || item.location === locationFilter;
-        return matchesSearch && matchesLocation;
-    });
-
-    renderListings(filteredData);
-});
-
-// Init
-document.addEventListener('DOMContentLoaded', () => {
-    updateNavState();
-    renderListings(getMarketListings());
-});
+// --- 6. Initialize App on Load ---
+document.addEventListener('DOMContentLoaded', checkAuthState);
