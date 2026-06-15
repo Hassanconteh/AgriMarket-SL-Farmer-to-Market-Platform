@@ -61,34 +61,27 @@
         </main>
     </div>
 
-    <!-- Auth Modal -->
     <div id="authModal" class="modal-overlay">
         <div class="modal-content float-in">
             <button class="close-btn" id="closeModal"><i class="fa-solid fa-xmark"></i></button>
             
-            <!-- Auth Tabs (Wrapped in an ID so we can hide it during Password Reset) -->
-            <div id="authTabsContainer" class="auth-tabs">
+            <div class="auth-tabs">
                 <button class="tab-btn active" id="tabLogin">Sign In</button>
                 <button class="tab-btn" id="tabRegister">Create Account</button>
             </div>
 
-            <!-- Login Form -->
             <form id="loginForm" class="auth-form active">
                 <div class="form-group">
                     <label>Email Address</label>
                     <input type="email" id="loginEmail" placeholder="e.g., trader@freetown.sl" required>
                 </div>
                 <div class="form-group">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                        <label style="margin-bottom: 0;">Password</label>
-                        <a href="#" id="forgotPasswordLink" class="auth-link">Forgot?</a>
-                    </div>
+                    <label>Password</label>
                     <input type="password" id="loginPassword" required>
                 </div>
                 <button type="submit" class="btn-full btn-blue">Sign In</button>
             </form>
 
-            <!-- Register Form -->
             <form id="registerForm" class="auth-form">
                 <div class="form-group">
                     <label>Full Name</label>
@@ -104,28 +97,10 @@
                 </div>
                 <button type="submit" class="btn-full btn-green">Create Account</button>
             </form>
-
-            <!-- Reset Password Form (Hidden by default) -->
-            <form id="resetForm" class="auth-form">
-                <h3 style="color: var(--sl-blue); margin-bottom: 0.5rem;">Reset Password</h3>
-                <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1.5rem;">Enter your email to set a new password.</p>
-                
-                <div class="form-group">
-                    <label>Account Email</label>
-                    <input type="email" id="resetEmail" required>
-                </div>
-                <div class="form-group">
-                    <label>New Password</label>
-                    <input type="password" id="newPassword" required>
-                </div>
-                <button type="submit" class="btn-full btn-blue">Update Password</button>
-                
-                <div style="text-align: center; margin-top: 1.5rem;">
-                    <a href="#" id="backToLoginLink" class="auth-link"><i class="fa-solid fa-arrow-left"></i> Back to Sign In</a>
-                </div>
-            </form>
         </div>
     </div>
+
+    <div id="toastContainer" class="toast-container"></div>
 
     <script src="app.js"></script>
 </body>
