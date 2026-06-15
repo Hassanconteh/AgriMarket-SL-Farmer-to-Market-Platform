@@ -55,17 +55,22 @@ function handleLogout() {
 
 // --- 3. Modal & Tab Logic ---
 const authModal = document.getElementById('authModal');
+const authTabsContainer = document.getElementById('authTabsContainer');
 const tabLogin = document.getElementById('tabLogin');
 const tabRegister = document.getElementById('tabRegister');
 const loginForm = document.getElementById('loginForm');
 const registerForm = document.getElementById('registerForm');
+const resetForm = document.getElementById('resetForm');
 
 function openModal(mode) {
     authModal.classList.add('active');
+    authTabsContainer.style.display = 'flex'; // Ensure tabs are visible
+    resetForm.classList.remove('active'); // Ensure reset form is hidden
+    
     if (mode === 'register') {
-        tabRegister.click(); // Simulate clicking the register tab
+        tabRegister.click();
     } else {
-        tabLogin.click(); // Simulate clicking the login tab
+        tabLogin.click();
     }
 }
 
@@ -73,6 +78,7 @@ document.getElementById('btnStartLogin').addEventListener('click', () => openMod
 document.getElementById('btnStartRegister').addEventListener('click', () => openModal('register'));
 document.getElementById('closeModal').addEventListener('click', () => authModal.classList.remove('active'));
 
+// Standard Tabs
 tabLogin.addEventListener('click', () => {
     tabLogin.classList.add('active'); tabRegister.classList.remove('active');
     loginForm.classList.add('active'); registerForm.classList.remove('active');
@@ -81,6 +87,21 @@ tabLogin.addEventListener('click', () => {
 tabRegister.addEventListener('click', () => {
     tabRegister.classList.add('active'); tabLogin.classList.remove('active');
     registerForm.classList.add('active'); loginForm.classList.remove('active');
+});
+
+// Password Reset Navigation
+document.getElementById('forgotPasswordLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    authTabsContainer.style.display = 'none'; // Hide top tabs
+    loginForm.classList.remove('active');
+    resetForm.classList.add('active'); // Show reset form
+});
+
+document.getElementById('backToLoginLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    resetForm.classList.remove('active');
+    authTabsContainer.style.display = 'flex'; // Bring back top tabs
+    loginForm.classList.add('active');
 });
 
 
@@ -99,12 +120,12 @@ registerForm.addEventListener('submit', (e) => {
     const newUser = { name, email, password };
     users.push(newUser);
     localStorage.setItem('agriUsers', JSON.stringify(users));
-    localStorage.setItem('currentUser', JSON.stringify(newUser)); // Auto-login
+    localStorage.setItem('currentUser', JSON.stringify(newUser)); 
     
     authModal.classList.remove('active');
     registerForm.reset();
     triggerToast(`Account created! Welcome to AgriMarket SL.`);
-    checkAuthState(); // Refresh View
+    checkAuthState(); 
 });
 
 loginForm.addEventListener('submit', (e) => {
@@ -119,12 +140,40 @@ loginForm.addEventListener('submit', (e) => {
         authModal.classList.remove('active');
         loginForm.reset();
         triggerToast(`Welcome back, ${user.name}!`);
-        checkAuthState(); // Refresh View
+        checkAuthState(); 
     } else {
         triggerToast("Invalid email or password.");
     }
 });
 
+// Password Reset Processing
+resetForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = document.getElementById('resetEmail').value;
+    const newPassword = document.getElementById('newPassword').value;
+    
+    const users = JSON.parse(localStorage.getItem('agriUsers'));
+    const userIndex = users.findIndex(u => u.email === email);
+
+    if (userIndex !== -1) {
+        // User found: Update their password in the array
+        users[userIndex].password = newPassword;
+        localStorage.setItem('agriUsers', JSON.stringify(users));
+        
+        triggerToast("Password successfully reset! Please log in.");
+        
+        // Reset the UI back to login mode
+        resetForm.reset();
+        resetForm.classList.remove('active');
+        authTabsContainer.style.display = 'flex';
+        loginForm.classList.add('active');
+        
+        // Convenience: Pre-fill the login email for them
+        document.getElementById('loginEmail').value = email;
+    } else {
+        triggerToast("Account with this email not found. Please check spelling.");
+    }
+});
 
 // --- 5. Market Dashboard Logic ---
 const container = document.getElementById('cropCardsContainer');
