@@ -129,6 +129,25 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <p>&copy; <span id="year"></span> AgriMarket SL. Empowering farmers across Sierra Leone.</p>
+                <span class="powered-by">Powered by Hassan Conteh</span>
+                <div class="footer-links">
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Support</a>
+                    <a href="#">Contact Us</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Set dynamic year
+        document.getElementById('year').textContent = new Date().getFullYear();
+    </script>
+
     <script src="app.js"></script>
 </body>
 </html>
