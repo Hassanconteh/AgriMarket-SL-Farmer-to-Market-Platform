@@ -12,7 +12,11 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-body { background-color: var(--bg-page); color: var(--text-main); line-height: 1.6; overflow-x: hidden; }
+body {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); /* Light blue gradient */
+    min-height: 100vh;
+    background-attachment: fixed; /* Keeps the gradient steady */
+}
 
 /* Animations */
 .float-in {
@@ -65,7 +69,17 @@ button { font-family: 'Inter', sans-serif; }
 .auth-action-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
 
 /* Dashboard Layout */
-.dashboard-header { background: var(--bg-card); padding: 2rem 0; border-bottom: 1px solid var(--border); margin-bottom: 2rem; }
+.dashboard-header {
+    background: rgba(255, 255, 255, 0.4); /* Reduced opacity for better glass effect */
+    backdrop-filter: blur(15px);           /* Stronger blur */
+    -webkit-backdrop-filter: blur(15px);   /* Safari support */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+    position: sticky; 
+    top: 0; 
+    z-index: 50;
+}
 .container { padding: 0 5%; max-width: 1400px; margin: 0 auto; }
 
 /* Search Bar */
@@ -78,8 +92,21 @@ button { font-family: 'Inter', sans-serif; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2rem; padding-bottom: 3rem;}
 
 /* Cards */
-.card { background: var(--bg-card); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid var(--border); transition: transform 0.2s; }
-.card:hover { transform: translateY(-4px); }
+.card {
+    background: rgba(255, 255, 255, 0.5); /* Semi-transparent */
+    backdrop-filter: blur(12px);           /* Glass blur effect */
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.4); /* Light border to define glass edge */
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15); /* Soft, colored shadow */
+    transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.card:hover {
+    background: rgba(255, 255, 255, 0.7); /* Slightly brighter on hover */
+    transform: translateY(-5px);
+}
 .card-img { width: 100%; height: 180px; object-fit: cover; }
 .card-content { padding: 1.5rem; }
 .badge-row { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; }
