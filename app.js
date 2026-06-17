@@ -1,7 +1,7 @@
 // --- 1. Database Initialization ---
 const mockData = [
-    { id: 1, crop: "Premium Milled Rice", category: "Grains", farmer: "Musa Kamara", location: "Makeni", price: "450", unit: "50kg bag", image: "https://images.unsplash.com/photo-1586201375761-83865001e8ac?auto=format&fit=crop&w=500&q=80", date: "Today", phone: "077xxxxxx" },
-    { id: 2, crop: "Fresh Cassava Tubers", category: "Root Crop", farmer: "Fatmata Sesay", location: "Bo", price: "150", unit: "dozen", image: "https://images.unsplash.com/photo-1596482161271-9b7e70417dd1?auto=format&fit=crop&w=500&q=80", date: "Yesterday", phone: "076xxxxxx" },
+    { id: 1, crop: "Premium Country Rice", category: "Grains", farmer: "Musa Kamara", location: "Makeni", price: "450", unit: "50kg bag", image: "./images/rice.jpg", date: "Today", phone: "077xxxxxx" },
+    { id: 2, crop: "Fresh Cassava Tubers", category: "Root Crop", farmer: "Fatmata Songa", location: "Bo", price: "150", unit: "dozen", image: "./images/cassava.jpg", date: "Yesterday", phone: "076xxxxxx" },
     { id: 3, crop: "Grade A Cocoa Beans", category: "Export Crop", farmer: "Aminata Kailondo", location: "Kenema", price: "800", unit: "bag", image: "./images/cocoa.jpg", date: "2 days ago", phone: "079xxxxxx" }
 ];
 
