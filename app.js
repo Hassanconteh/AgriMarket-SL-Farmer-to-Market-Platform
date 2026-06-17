@@ -52,6 +52,56 @@ function handleLogout() {
     checkAuthState(); // Refresh view back to landing page
 }
 
+// --- New: Static Page Content ---
+const staticPages = {
+    privacy: {
+        title: "Privacy Policy",
+        content: `<h3>Our Commitment to Your Privacy</h3>
+                  <p>At AgriMarket SL, we value the trust of Sierra Leonean farmers. We collect only essential data to connect you with market opportunities. We do not sell your personal information to third parties.</p>`
+    },
+    support: {
+        title: "Support",
+        content: `<h3>Need Help?</h3>
+                  <p>Our team is here to assist you with account access, navigation, or marketplace listings. Please reach out to the site administrator at hassanconteh132@gmail.com if you encounter any technical issues while using the platform.</p>`
+    },
+    contact: {
+        title: "Contact Us",
+        content: `<h3>Contact Site Admin</h3>
+                  <p>For official inquiries or partnership opportunities:</p>
+                  <p><strong>Email:</strong> hassanconteh132@gmail.com<br>
+                  <strong>Phone:</strong> +232 76 786 944<br>
+                  <strong>WhatsApp:</strong> +232 76 786 944<br>
+                  <strong>Office:</strong> Kenema, Sierra Leone</p>`
+    }
+};
+
+function showPage(pageKey) {
+    const staticContainer = document.getElementById('staticPageContainer');
+    const staticContent = document.getElementById('staticContent');
+    const page = staticPages[pageKey];
+    
+    // Hide everything else
+    document.getElementById('landingPage').style.display = 'none';
+    document.getElementById('dashboardApp').style.display = 'none';
+    
+    // Show static container and inject content
+    staticContainer.style.display = 'block';
+    staticContent.innerHTML = `<h2>${page.title}</h2><div style="margin-top:1rem;">${page.content}</div>`;
+}
+
+function showDashboard() {
+    document.getElementById('staticPageContainer').style.display = 'none';
+    checkAuthState(); // Re-runs your existing check
+}
+
+// Attach these to your Footer Links
+document.querySelectorAll('.footer-links a').forEach((link, index) => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const pages = ['privacy', 'support', 'contact'];
+        showPage(pages[index]);
+    });
+});
 
 // --- 3. Modal & Tab Logic ---
 const authModal = document.getElementById('authModal');
