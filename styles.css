@@ -212,3 +212,6 @@ body {
 .powered-by:hover {
     color: var(--sl-green);
 }
+
+.card-meta p { display: flex; align-items: center; gap: 5px; }
+.card-meta a { color: var(--sl-blue); text-decoration: none; font-weight: 600; }
