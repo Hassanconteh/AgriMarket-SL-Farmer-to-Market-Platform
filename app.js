@@ -175,13 +175,14 @@ resetForm.addEventListener('submit', (e) => {
     }
 });
 
-// --- 5. Market Dashboard Logic ---
+// --- 5. Market Dashboard Logic (Updated) ---
 const container = document.getElementById('cropCardsContainer');
-const resultCount = document.getElementById('resultCount');
+// Note: Ensure you have an element with id="resultCount" in your index.html
+const resultCount = document.getElementById('resultCount'); 
 
 function renderListings(listings) {
     container.innerHTML = ''; 
-    resultCount.innerText = `${listings.length} active listing(s)`;
+    if(resultCount) resultCount.innerText = `${listings.length} active listing(s)`;
 
     listings.forEach((item, index) => {
         const card = document.createElement('div');
@@ -197,15 +198,18 @@ function renderListings(listings) {
                 </div>
                 <h3 class="card-title">${item.crop}</h3>
                 <span class="card-price">NLE ${item.price} <span style="font-size:0.9rem; color:#64748b;">/ ${item.unit}</span></span>
-                <button class="btn-contact" onclick="triggerToast('Opening chat with ${item.farmer}...')">
-                    <i class="fa-regular fa-comment-dots"></i> Message Farmer
-                </button>
+                
+                <!-- Added Contact & Info Section -->
+                <div class="card-meta" style="margin-top:1rem; font-size:0.85rem; color:#475569; border-top: 1px solid #e2e8f0; padding-top:0.8rem;">
+                    <p style="margin-bottom:0.3rem;"><strong>Farmer:</strong> ${item.farmer}</p>
+                    <p style="margin-bottom:0.3rem;"><strong>Phone:</strong> <a href="tel:${item.phone}">${item.phone}</a></p>
+                    <p style="margin-bottom:0.3rem;"><strong>Posted:</strong> ${item.date}</p>
+                </div>
             </div>
         `;
         container.appendChild(card);
     });
 }
-
 document.getElementById('searchBtn').addEventListener('click', () => {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     const locationFilter = document.getElementById('locationFilter').value;
