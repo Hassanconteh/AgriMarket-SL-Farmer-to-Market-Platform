@@ -233,7 +233,7 @@ function renderListings(listings) {
                     <span class="badge badge-location"><i class="fa-solid fa-map-pin"></i> ${item.location}</span>
                 </div>
                 <h3 class="card-title">${item.crop}</h3>
-                <span class="card-price">NLE ${item.price} <span style="font-size:0.9rem; color:#64748b;">/ ${item.unit}</span></span>
+                <span class="card-price">SLLE ${item.price} <span style="font-size:0.9rem; color:#64748b;">/ ${item.unit}</span></span>
 
                 <div class="card-meta" style="margin-top:1rem; font-size:0.85rem; color:#475569; border-top: 1px solid #e2e8f0; padding-top:0.8rem;">
                     <p style="margin-bottom:0.3rem;"><strong>Farmer:</strong> ${item.farmer}</p>
