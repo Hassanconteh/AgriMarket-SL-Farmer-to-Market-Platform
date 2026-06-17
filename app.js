@@ -8,22 +8,27 @@ const mockData = [
 if (!localStorage.getItem('agriMarketData_v2')) localStorage.setItem('agriMarketData_v2', JSON.stringify(mockData));
 if (!localStorage.getItem('agriUsers')) localStorage.setItem('agriUsers', JSON.stringify([]));
 
-// --- 2. View Management ---
+// --- 2. Centralized View Management ---
 const landingPage = document.getElementById('landingPage');
 const dashboardApp = document.getElementById('dashboardApp');
 const staticContainer = document.getElementById('staticPageContainer');
 const navMenu = document.getElementById('navMenu');
 
+/**
+ * Force the UI into one of three states. 
+ * This prevents the "blank screen" or "overlapping" issues.
+ */
+function setView(view) {
+    landingPage.style.display = (view === 'landing') ? 'flex' : 'none';
+    dashboardApp.style.display = (view === 'dashboard') ? 'block' : 'none';
+    staticContainer.style.display = (view === 'static') ? 'block' : 'none';
+}
+
 function checkAuthState() {
     const user = JSON.parse(localStorage.getItem('currentUser'));
-    
-    // Hide all main sections
-    landingPage.style.display = 'none';
-    dashboardApp.style.display = 'none';
-    staticContainer.style.display = 'none';
 
     if (user) {
-        dashboardApp.style.display = 'block';
+        setView('dashboard');
         navMenu.innerHTML = `
             <span class="nav-link"><i class="fa-solid fa-user-check"></i> Hello, ${user.name.split(' ')[0]}</span>
             <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
@@ -31,28 +36,25 @@ function checkAuthState() {
         document.getElementById('navLogoutBtn').addEventListener('click', handleLogout);
         renderListings(JSON.parse(localStorage.getItem('agriMarketData_v2')));
     } else {
-        landingPage.style.display = 'flex';
+        setView('landing');
         navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
         document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
     }
 }
-
 // --- 3. Static Page Logic ---
-const staticPages = {
-    privacy: { title: "Privacy Policy", content: "<h3>Our Commitment to Your Privacy</h3><p>At AgriMarket SL, we value the trust of Sierra Leonean farmers. We collect only essential data to connect you with market opportunities.</p>" },
-    support: { title: "Support", content: "<h3>Need Help?</h3><p>Please reach out to the site administrator at hassanconteh132@gmail.com if you encounter any technical issues.</p>" },
-    contact: { title: "Contact Us", content: "<h3>Contact Site Admin</h3><p><strong>Email:</strong> hassanconteh132@gmail.com<br><strong>Phone:</strong> +232 76 786 944</p>" }
-};
-
 function showPage(pageKey) {
-    landingPage.style.display = 'none';
-    dashboardApp.style.display = 'none';
-    staticContainer.style.display = 'block';
+    setView('static');
     const page = staticPages[pageKey];
-    document.getElementById('staticContent').innerHTML = `<h2>${page.title}</h2><div style="margin-top:1rem;">${page.content}</div>`;
+    document.getElementById('staticContent').innerHTML = `
+        <h2>${page.title}</h2>
+        <div style="margin-top:1rem;">${page.content}</div>
+    `;
 }
 
-function showDashboard() { checkAuthState(); }
+function showDashboard() {
+    // Re-run the auth check to determine if we show landing or dashboard
+    checkAuthState();
+}
 
 // --- 4. Search & Render ---
 function renderListings(listings) {
