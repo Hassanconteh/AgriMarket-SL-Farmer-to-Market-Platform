@@ -1,106 +1,100 @@
 // --- 1. Database Initialization ---
 const mockData = [
-    { id: 1, crop: "Premium Country Rice", category: "Grains", farmer: "Musa Kamara", location: "Makeni", price: "450", unit: "50kg bag", image: "./images/rice.jpg", date: "Today", phone: "077xxxxxx" },
-    { id: 2, crop: "Fresh Cassava Tubers", category: "Root Crop", farmer: "Fatmata Songa", location: "Bo", price: "150", unit: "dozen", image: "./images/cassava.jpg", date: "Yesterday", phone: "076xxxxxx" },
-    { id: 3, crop: "Grade A Cocoa Beans", category: "Export Crop", farmer: "Aminata Kailondo", location: "Kenema", price: "800", unit: "bag", image: "./images/cocoa.jpg", date: "2 days ago", phone: "079xxxxxx" }
+    { id: 1, crop: "Premium Country Rice", category: "Grains", farmer: "Musa Kamara", location: "Makeni", price: "450", unit: "50kg bag", image: "./images/rice.jpg", date: "Today", phone: "077xxxxxx" },
+    { id: 2, crop: "Fresh Cassava Tubers", category: "Root Crop", farmer: "Fatmata Songa", location: "Bo", price: "150", unit: "dozen", image: "./images/cassava.jpg", date: "Yesterday", phone: "076xxxxxx" },
+    { id: 3, crop: "Grade A Cocoa Beans", category: "Export Crop", farmer: "Aminata Kailondo", location: "Kenema", price: "800", unit: "bag", image: "./images/cocoa.jpg", date: "2 days ago", phone: "079xxxxxx" }
 ];
 
 if (!localStorage.getItem('agriMarketData_v2')) localStorage.setItem('agriMarketData_v2', JSON.stringify(mockData));
 if (!localStorage.getItem('agriUsers')) localStorage.setItem('agriUsers', JSON.stringify([]));
 
-
-// --- 2. View Management (The "Auth Gate") ---
+// --- 2. View Management ---
 const landingPage = document.getElementById('landingPage');
 const dashboardApp = document.getElementById('dashboardApp');
+const staticContainer = document.getElementById('staticPageContainer');
 const navMenu = document.getElementById('navMenu');
 
 function checkAuthState() {
-    const user = JSON.parse(localStorage.getItem('currentUser'));
+    const user = JSON.parse(localStorage.getItem('currentUser'));
+    
+    // Hide all main sections
+    landingPage.style.display = 'none';
+    dashboardApp.style.display = 'none';
+    staticContainer.style.display = 'none';
 
-    if (user) {
-        // User IS logged in: Show Dashboard, Hide Landing
-        landingPage.style.display = 'none';
-        dashboardApp.style.display = 'block';
-        
-        // Populate Navigation for Logged-in User
-        navMenu.innerHTML = `
-            <span class="nav-link"><i class="fa-solid fa-user-check"></i> Hello, ${user.name.split(' ')[0]}</span>
-            <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
-        `;
-        
-        // Attach logout listener
-        document.getElementById('navLogoutBtn').addEventListener('click', handleLogout);
-        
-        // Render data
-        renderListings(JSON.parse(localStorage.getItem('agriMarketData_v2')));
-    } else {
-        // User IS NOT logged in: Show Landing, Hide Dashboard
-        landingPage.style.display = 'flex';
-        dashboardApp.style.display = 'none';
-        
-        // Populate Navigation for Guest
-        navMenu.innerHTML = `
-            <button id="navLoginBtn" class="btn-outline">Log In</button>
-        `;
-        document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
-    }
+    if (user) {
+        dashboardApp.style.display = 'block';
+        navMenu.innerHTML = `
+            <span class="nav-link"><i class="fa-solid fa-user-check"></i> Hello, ${user.name.split(' ')[0]}</span>
+            <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
+        `;
+        document.getElementById('navLogoutBtn').addEventListener('click', handleLogout);
+        renderListings(JSON.parse(localStorage.getItem('agriMarketData_v2')));
+    } else {
+        landingPage.style.display = 'flex';
+        navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
+        document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
+    }
 }
 
-function handleLogout() {
-    localStorage.removeItem('currentUser');
-    triggerToast("You have been securely logged out.");
-    checkAuthState(); // Refresh view back to landing page
-}
-
-// --- New: Static Page Content ---
+// --- 3. Static Page Logic ---
 const staticPages = {
-    privacy: {
-        title: "Privacy Policy",
-        content: `<h3>Our Commitment to Your Privacy</h3>
-                  <p>At AgriMarket SL, we value the trust of Sierra Leonean farmers. We collect only essential data to connect you with market opportunities. We do not sell your personal information to third parties.</p>`
-    },
-    support: {
-        title: "Support",
-        content: `<h3>Need Help?</h3>
-                  <p>Our team is here to assist you with account access, navigation, or marketplace listings. Please reach out to the site administrator at hassanconteh132@gmail.com if you encounter any technical issues while using the platform.</p>`
-    },
-    contact: {
-        title: "Contact Us",
-        content: `<h3>Contact Site Admin</h3>
-                  <p>For official inquiries or partnership opportunities:</p>
-                  <p><strong>Email:</strong> hassanconteh132@gmail.com<br>
-                  <strong>Phone:</strong> +232 76 786 944<br>
-                  <strong>WhatsApp:</strong> +232 76 786 944<br>
-                  <strong>Office:</strong> Kenema, Sierra Leone</p>`
-    }
+    privacy: { title: "Privacy Policy", content: "<h3>Our Commitment to Your Privacy</h3><p>At AgriMarket SL, we value the trust of Sierra Leonean farmers. We collect only essential data to connect you with market opportunities.</p>" },
+    support: { title: "Support", content: "<h3>Need Help?</h3><p>Please reach out to the site administrator at hassanconteh132@gmail.com if you encounter any technical issues.</p>" },
+    contact: { title: "Contact Us", content: "<h3>Contact Site Admin</h3><p><strong>Email:</strong> hassanconteh132@gmail.com<br><strong>Phone:</strong> +232 76 786 944</p>" }
 };
 
 function showPage(pageKey) {
-    const staticContainer = document.getElementById('staticPageContainer');
-    const staticContent = document.getElementById('staticContent');
-    const page = staticPages[pageKey];
-    
-    // Hide everything else
-    document.getElementById('landingPage').style.display = 'none';
-    document.getElementById('dashboardApp').style.display = 'none';
-    
-    // Show static container and inject content
-    staticContainer.style.display = 'block';
-    staticContent.innerHTML = `<h2>${page.title}</h2><div style="margin-top:1rem;">${page.content}</div>`;
+    landingPage.style.display = 'none';
+    dashboardApp.style.display = 'none';
+    staticContainer.style.display = 'block';
+    const page = staticPages[pageKey];
+    document.getElementById('staticContent').innerHTML = `<h2>${page.title}</h2><div style="margin-top:1rem;">${page.content}</div>`;
 }
 
-function showDashboard() {
-    document.getElementById('staticPageContainer').style.display = 'none';
-    checkAuthState(); // Re-runs your existing check
+function showDashboard() { checkAuthState(); }
+
+// --- 4. Search & Render ---
+function renderListings(listings) {
+    const container = document.getElementById('cropCardsContainer');
+    const resultCount = document.getElementById('resultCount');
+    container.innerHTML = '';
+    if(resultCount) resultCount.innerText = `${listings.length} active listing(s)`;
+
+    listings.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = 'card float-in';
+        card.style.animationDelay = `${index * 0.1}s`;
+        card.innerHTML = `
+            <img src="${item.image}" alt="${item.crop}" class="card-img">
+            <div class="card-content">
+                <div class="badge-row"><span class="badge badge-category">${item.category}</span><span class="badge badge-location">${item.location}</span></div>
+                <h3 class="card-title">${item.crop}</h3>
+                <span class="card-price">NLE ${item.price} / ${item.unit}</span>
+                <div class="card-meta" style="margin-top:1rem; border-top: 1px solid #e2e8f0; padding-top:0.8rem;">
+                    <p><strong>Farmer:</strong> ${item.farmer}</p>
+                    <p><strong>Phone:</strong> <a href="tel:${item.phone}">${item.phone}</a></p>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
 }
 
-// Attach these to your Footer Links
+// Attach Event Listeners
 document.querySelectorAll('.footer-links a').forEach((link, index) => {
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        const pages = ['privacy', 'support', 'contact'];
-        showPage(pages[index]);
-    });
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const pages = ['privacy', 'support', 'contact'];
+        showPage(pages[index]);
+    });
+});
+
+document.getElementById('searchBtn').addEventListener('click', () => {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const locationFilter = document.getElementById('locationFilter').value;
+    const data = JSON.parse(localStorage.getItem('agriMarketData_v2'));
+    renderListings(data.filter(item => item.crop.toLowerCase().includes(searchTerm) && (locationFilter === "All" || item.location === locationFilter)));
 });
 
 // --- 3. Modal & Tab Logic ---
