@@ -2,7 +2,6 @@
 // REPLACE THESE WITH YOUR ACTUAL PROJECT VALUES FROM SUPABASE DASHBOARD
 const SUPABASE_URL = 'https://tmguwkueepgabbzsehdu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZ3V3a3VlZXBnYWJienNlaGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMzMwNTgsImV4cCI6MjA5NzYwOTA1OH0.uNw6FAn9OmUAZVSKhBb8IgKsoEJkMWwN6_yFWzRTwPw';
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=500&q=80";
 
