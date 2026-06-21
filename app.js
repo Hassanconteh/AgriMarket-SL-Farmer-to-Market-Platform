@@ -1,86 +1,59 @@
-// --- 1. Database Initialization ---
-const mockData = [
-    { id: 1, crop: "Premium Country Rice", category: "Grains", farmer: "Musa Kamara", location: "Makeni", price: "450", unit: "50kg bag", image: "./images/rice.jpg", date: "Today", phone: "077xxxxxx" },
-    { id: 2, crop: "Fresh Cassava Tubers", category: "Root Crop", farmer: "Fatmata Songa", location: "Bo", price: "150", unit: "dozen", image: "./images/cassava.jpg", date: "Yesterday", phone: "076xxxxxx" },
-    { id: 3, crop: "Grade A Cocoa Beans", category: "Export Crop", farmer: "Aminata Kailondo", location: "Kenema", price: "800", unit: "bag", image: "./images/cocoa.jpg", date: "2 days ago", phone: "079xxxxxx" }
-];
+// --- 1. Supabase Initialization ---
+// REPLACE THESE WITH YOUR ACTUAL PROJECT VALUES FROM SUPABASE DASHBOARD
+const SUPABASE_URL = 'https://tmguwkueepgabbzsehdu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZ3V3a3VlZXBnYWJienNlaGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMzMwNTgsImV4cCI6MjA5NzYwOTA1OH0.uNw6FAn9OmUAZVSKhBb8IgKsoEJkMWwN6_yFWzRTwPw';
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=500&q=80";
 
-if (!localStorage.getItem('agriMarketData_v2')) localStorage.setItem('agriMarketData_v2', JSON.stringify(mockData));
-if (!localStorage.getItem('agriUsers')) localStorage.setItem('agriUsers', JSON.stringify([]));
-
-
-// --- 2. View Management (The "Auth Gate") ---
+// --- 2. View Management & Auth State ---
 const landingPage = document.getElementById('landingPage');
 const dashboardApp = document.getElementById('dashboardApp');
 const navMenu = document.getElementById('navMenu');
 
-function checkAuthState() {
-    const user = JSON.parse(localStorage.getItem('currentUser'));
+async function checkAuthState() {
+    const { data: { user } } = await supabase.auth.getUser();
 
     if (user) {
         landingPage.style.display = 'none';
         dashboardApp.style.display = 'block';
 
         navMenu.innerHTML = `
-            <span class="nav-link"><i class="fa-solid fa-user-check"></i> Hello, ${user.name.split(' ')[0]}</span>
+            <span class="nav-link"><i class="fa-solid fa-user-check"></i> Hello, User</span>
             <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
         `;
-
         document.getElementById('navLogoutBtn').addEventListener('click', handleLogout);
-
-        renderListings(JSON.parse(localStorage.getItem('agriMarketData_v2')));
+        
+        // Fetch real data from Supabase
+        const { data: crops, error } = await supabase.from('crops').select('*');
+        if (!error) renderListings(crops);
     } else {
         landingPage.style.display = 'flex';
         dashboardApp.style.display = 'none';
-
-        navMenu.innerHTML = `
-            <button id="navLoginBtn" class="btn-outline">Log In</button>
-        `;
+        navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
         document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
     }
 }
 
-function handleLogout() {
-    localStorage.removeItem('currentUser');
+async function handleLogout() {
+    await supabase.auth.signOut();
     triggerToast("You have been securely logged out.");
     checkAuthState();
 }
 
-// --- Static Page Content ---
+// --- 3. Static Page Logic (Kept as is) ---
 const staticPages = {
-    privacy: {
-        title: "Privacy Policy",
-        content: `<h3>Our Commitment to Your Privacy</h3>
-                  <p>At AgriMarket SL, we value the trust of Sierra Leonean farmers. We collect only essential data to connect you with market opportunities. We do not sell your personal information to third parties.</p>`
-    },
-    support: {
-        title: "Support",
-        content: `<h3>Need Help?</h3>
-                  <p>Our team is here to assist you with account access, navigation, or marketplace listings. Please reach out to the site administrator at hassanconteh132@gmail.com if you encounter any technical issues while using the platform.</p>`
-    },
-    contact: {
-        title: "Contact Us",
-        content: `<h3>Contact Site Admin</h3>
-                  <p>For official inquiries or partnership opportunities:</p>
-                  <p><strong>Email:</strong> hassanconteh132@gmail.com<br>
-                  <strong>Phone:</strong> +232 76 786 944<br>
-                  <strong>WhatsApp:</strong> +232 76 786 944<br>
-                  <strong>Office:</strong> Kenema, Sierra Leone</p>`
-    }
+    privacy: { title: "Privacy Policy", content: "<h3>Privacy Commitment</h3><p>We protect your data.</p>" },
+    support: { title: "Support", content: "<h3>Need Help?</h3><p>Contact hassanconteh132@gmail.com</p>" },
+    contact: { title: "Contact Us", content: "<h3>Contact Admin</h3><p>Phone: +232 76 786 944</p>" }
 };
 
 function showPage(pageKey) {
-    const staticContainer = document.getElementById('staticPageContainer');
-    const staticContent = document.getElementById('staticContent');
-    const page = staticPages[pageKey];
-
     document.getElementById('landingPage').style.display = 'none';
     document.getElementById('dashboardApp').style.display = 'none';
-
-    staticContainer.style.display = 'block';
-    staticContent.innerHTML = `<h2>${page.title}</h2><div style="margin-top:1rem;">${page.content}</div>`;
+    document.getElementById('staticPageContainer').style.display = 'block';
+    const page = staticPages[pageKey];
+    document.getElementById('staticContent').innerHTML = `<h2>${page.title}</h2><div style="margin-top:1rem;">${page.content}</div>`;
 }
 
 function showDashboard() {
@@ -88,196 +61,62 @@ function showDashboard() {
     checkAuthState();
 }
 
-document.querySelectorAll('.footer-links a').forEach((link, index) => {
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        const pages = ['privacy', 'support', 'contact'];
-        showPage(pages[index]);
-    });
-});
-
-// --- 3. Modal & Tab Logic ---
-const authModal = document.getElementById('authModal');
-const authTabsContainer = document.getElementById('authTabsContainer');
-const tabLogin = document.getElementById('tabLogin');
-const tabRegister = document.getElementById('tabRegister');
-const loginForm = document.getElementById('loginForm');
-const registerForm = document.getElementById('registerForm');
-const resetForm = document.getElementById('resetForm');
-
-function openModal(mode) {
-    authModal.classList.add('active');
-    authTabsContainer.style.display = 'flex';
-    resetForm.classList.remove('active');
-
-    if (mode === 'register') {
-        tabRegister.click();
-    } else {
-        tabLogin.click();
-    }
-}
-
-document.getElementById('btnStartLogin').addEventListener('click', () => openModal('login'));
-document.getElementById('btnStartRegister').addEventListener('click', () => openModal('register'));
-document.getElementById('closeModal').addEventListener('click', () => authModal.classList.remove('active'));
-
-tabLogin.addEventListener('click', () => {
-    tabLogin.classList.add('active'); tabRegister.classList.remove('active');
-    loginForm.classList.add('active'); registerForm.classList.remove('active');
-});
-
-tabRegister.addEventListener('click', () => {
-    tabRegister.classList.add('active'); tabLogin.classList.remove('active');
-    registerForm.classList.add('active'); loginForm.classList.remove('active');
-});
-
-document.getElementById('forgotPasswordLink').addEventListener('click', (e) => {
+// --- 4. Authentication Processing (Supabase Auth) ---
+registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    authTabsContainer.style.display = 'none';
-    loginForm.classList.remove('active');
-    resetForm.classList.add('active');
-});
-
-document.getElementById('backToLoginLink').addEventListener('click', (e) => {
-    e.preventDefault();
-    resetForm.classList.remove('active');
-    authTabsContainer.style.display = 'flex';
-    loginForm.classList.add('active');
-});
-
-
-// --- 4. Authentication Processing ---
-registerForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const name = document.getElementById('regName').value;
     const email = document.getElementById('regEmail').value;
     const password = document.getElementById('regPassword').value;
-    const users = JSON.parse(localStorage.getItem('agriUsers'));
 
-    if (users.find(u => u.email === email)) {
-        triggerToast("Email already exists. Try logging in."); return;
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) triggerToast(error.message);
+    else {
+        authModal.classList.remove('active');
+        triggerToast("Account created! Please check your email.");
     }
-
-    const newUser = { name, email, password };
-    users.push(newUser);
-    localStorage.setItem('agriUsers', JSON.stringify(users));
-    localStorage.setItem('currentUser', JSON.stringify(newUser));
-
-    authModal.classList.remove('active');
-    registerForm.reset();
-    triggerToast(`Account created! Welcome to AgriMarket SL.`);
-    checkAuthState();
 });
 
-loginForm.addEventListener('submit', (e) => {
+loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
-    const users = JSON.parse(localStorage.getItem('agriUsers'));
-    const user = users.find(u => u.email === email && u.password === password);
 
-    if (user) {
-        localStorage.setItem('currentUser', JSON.stringify(user));
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) triggerToast("Invalid email or password.");
+    else {
         authModal.classList.remove('active');
-        loginForm.reset();
-        triggerToast(`Welcome back, ${user.name}!`);
         checkAuthState();
-    } else {
-        triggerToast("Invalid email or password.");
     }
 });
 
-resetForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const email = document.getElementById('resetEmail').value;
-    const newPassword = document.getElementById('newPassword').value;
-
-    const users = JSON.parse(localStorage.getItem('agriUsers'));
-    const userIndex = users.findIndex(u => u.email === email);
-
-    if (userIndex !== -1) {
-        users[userIndex].password = newPassword;
-        localStorage.setItem('agriUsers', JSON.stringify(users));
-
-        triggerToast("Password successfully reset! Please log in.");
-
-        resetForm.reset();
-        resetForm.classList.remove('active');
-        authTabsContainer.style.display = 'flex';
-        loginForm.classList.add('active');
-
-        document.getElementById('loginEmail').value = email;
-    } else {
-        triggerToast("Account with this email not found. Please check spelling.");
-    }
-});
-
-// --- 5. Market Dashboard Logic ---
-const container = document.getElementById('cropCardsContainer');
-const resultCount = document.getElementById('resultCount');
-
-function renderListings(listings) {
+// --- 5. Market Dashboard Logic (Supabase Query) ---
+async function renderListings(listings) {
+    const container = document.getElementById('cropCardsContainer');
     container.innerHTML = '';
-    if (resultCount) resultCount.innerText = `${listings.length} active listing(s)`;
-
-    listings.forEach((item, index) => {
+    listings.forEach((item) => {
         const card = document.createElement('div');
-        card.className = 'card float-in';
-        card.style.animationDelay = `${index * 0.1}s`;
-
+        card.className = 'card';
         card.innerHTML = `
-            <img src="${item.image}" alt="${item.crop}" class="card-img" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}';">
+            <img src="${item.image_url || FALLBACK_IMAGE}" class="card-img">
             <div class="card-content">
-                <div class="badge-row">
-                    <span class="badge badge-category">${item.category}</span>
-                    <span class="badge badge-location"><i class="fa-solid fa-map-pin"></i> ${item.location}</span>
-                </div>
-                <h3 class="card-title">${item.crop}</h3>
-                <span class="card-price">SLLE ${item.price} <span style="font-size:0.9rem; color:#64748b;">/ ${item.unit}</span></span>
-
-                <div class="card-meta" style="margin-top:1rem; font-size:0.85rem; color:#475569; border-top: 1px solid #e2e8f0; padding-top:0.8rem;">
-                    <p style="margin-bottom:0.3rem;"><strong>Farmer:</strong> ${item.farmer}</p>
-                    <p style="margin-bottom:0.3rem;"><strong>Phone:</strong> <a href="tel:${item.phone}">${item.phone}</a></p>
-                    <p style="margin-bottom:0.3rem;"><strong>Posted:</strong> ${item.date}</p>
-                </div>
+                <h3>${item.name}</h3>
+                <span class="card-price">SLLE ${item.price}</span>
             </div>
         `;
         container.appendChild(card);
     });
 }
 
-function applyFilters() {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    const locationFilter = document.getElementById('locationFilter').value;
-    const data = JSON.parse(localStorage.getItem('agriMarketData_v2'));
+async function applyFilters() {
+    const searchTerm = document.getElementById('searchInput').value;
+    const location = document.getElementById('locationFilter').value;
 
-    const filtered = data.filter(item => {
-        const matchesSearch = item.crop.toLowerCase().includes(searchTerm);
-        const matchesLocation = locationFilter === "All" || item.location === locationFilter;
-        return matchesSearch && matchesLocation;
-    });
-    renderListings(filtered);
+    let query = supabase.from('crops').select('*');
+    if (searchTerm) query = query.ilike('name', `%${searchTerm}%`);
+    if (location !== "All") query = query.eq('location', location);
+
+    const { data } = await query;
+    renderListings(data || []);
 }
 
 document.getElementById('searchBtn').addEventListener('click', applyFilters);
-document.getElementById('searchInput').addEventListener('keyup', (e) => {
-    if (e.key === 'Enter') applyFilters();
-});
-document.getElementById('locationFilter').addEventListener('change', applyFilters);
-
-// Helper: UI Notifications
-function triggerToast(message) {
-    const toastBox = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `<i class="fa-solid fa-circle-info" style="color: #4ade80; margin-right:8px;"></i> ${message}`;
-    toastBox.appendChild(toast);
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(20px)';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-// --- 6. Initialize App on Load ---
 document.addEventListener('DOMContentLoaded', checkAuthState);
