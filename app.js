@@ -1,7 +1,8 @@
 const SUPABASE_URL = 'https://tmguwkueepgabbzsehdu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZ3V3a3VlZXBnYWJienNlaGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMzMwNTgsImV4cCI6MjA5NzYwOTA1OH0.uNw6FAn9OmUAZVSKhBb8IgKsoEJkMWwN6_yFWzRTwPw';
 
-const supabase = window.supabase.createClient(https://tmguwkueepgabbzsehdu.supabase.co, eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZ3V3a3VlZXBnYWJienNlaGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMzMwNTgsImV4cCI6MjA5NzYwOTA1OH0.uNw6FAn9OmUAZVSKhBb8IgKsoEJkMWwN6_yFWzRTwPw);
+const {createClient} = window.supabase;
+const supabase = createClient(https://tmguwkueepgabbzsehdu.supabase.co, eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZ3V3a3VlZXBnYWJienNlaGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMzMwNTgsImV4cCI6MjA5NzYwOTA1OH0.uNw6FAn9OmUAZVSKhBb8IgKsoEJkMWwN6_yFWzRTwPw);
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=500&q=80";
 
@@ -79,7 +80,9 @@ async function checkAuthState() {
         document.getElementById('navLogoutBtn').addEventListener('click', handleLogout);
 
         const { data: crops, error } = await supabase.from('crops').select('*');
-        if (!error) renderListings(crops || []);
+        if (error){
+            console.error('crops select failed: ', error);
+            renderListings(crops || []);
     } else {
         landingPage.style.display = 'flex';
         dashboardApp.style.display = 'none';
