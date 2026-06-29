@@ -14,14 +14,13 @@
 <body>
     <header class="navbar float-in">
         <div class="logo"><i class="fa-solid fa-leaf"></i> AgriMarket SL</div>
-        <nav id="navMenu" aria-label="Account">
-            </nav>
+        <nav id="navMenu" aria-label="Account"></nav>
     </header>
 
     <div id="landingPage" class="hero full-screen float-in" style="animation-delay: 0.2s;">
         <div class="hero-content">
             <h1>Connecting Sierra Leone's Farmers to the World</h1>
-            <p>You must be signed in to access real-time crop prices, contact local farmers, and view agricultural data.</p>
+            <p>Sign in to access real-time crop prices, contact local farmers, and view agricultural data.</p>
             <div class="auth-action-buttons">
                 <button id="btnStartLogin" class="btn-blue btn-large"><i class="fa-solid fa-right-to-bracket"></i> Sign In</button>
                 <button id="btnStartRegister" class="btn-green btn-large"><i class="fa-solid fa-user-plus"></i> Create Account</button>
@@ -34,11 +33,11 @@
             <div class="container">
                 <section class="search-bar">
                     <div class="input-group">
-                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <i class="fa-solid fa-magnifying-glass input-icon"></i>
                         <input type="text" id="searchInput" placeholder="Search for Rice, Cocoa, Cassava...">
                     </div>
                     <div class="input-group">
-                        <i class="fa-solid fa-location-dot"></i>
+                        <i class="fa-solid fa-location-dot input-icon"></i>
                         <select id="locationFilter">
                             <option value="All">All Regions</option>
                             <option value="Bo">Bo</option>
@@ -58,24 +57,20 @@
                     <h2>Live Market Listings</h2>
                     <span id="resultCount" class="text-muted">Loading...</span>
                 </div>
-                <div id="cropCardsContainer" class="grid">
-                    </div>
+                <div id="cropCardsContainer" class="grid"></div>
             </section>
         </main>
     </div>
 
-<!-- Auth Modal -->
     <div id="authModal" class="modal-overlay">
         <div class="modal-content float-in">
             <button class="close-btn" id="closeModal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
 
-            <!-- Auth Tabs (Wrapped in an ID so we can hide it during Password Reset) -->
             <div id="authTabsContainer" class="auth-tabs">
                 <button class="tab-btn active" id="tabLogin">Sign In</button>
                 <button class="tab-btn" id="tabRegister">Create Account</button>
             </div>
 
-            <!-- Login Form -->
             <form id="loginForm" class="auth-form active">
                 <div class="form-group">
                     <label for="loginEmail">Email Address</label>
@@ -91,11 +86,10 @@
                 <button type="submit" class="btn-full btn-blue">Sign In</button>
             </form>
 
-            <!-- Register Form -->
             <form id="registerForm" class="auth-form">
                 <div class="form-group">
                     <label for="regName">Full Name</label>
-                    <input type="text" id="regName" autocomplete="name" placeholder="eg. Hassan Conteh" required>
+                    <input type="text" id="regName" autocomplete="name" placeholder="e.g. Hassan Conteh" required>
                 </div>
                 <div class="form-group">
                     <label for="regEmail">Email Address</label>
@@ -108,11 +102,9 @@
                 <button type="submit" class="btn-full btn-green">Create Account</button>
             </form>
 
-            <!-- Reset Password Form (Hidden by default) -->
             <form id="resetForm" class="auth-form">
                 <h3 style="color: var(--sl-blue); margin-bottom: 0.5rem;">Reset Password</h3>
-                <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1.5rem;">Enter your email to set a new password.</p>
-
+                <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1.5rem;">Enter your email and a new password below.</p>
                 <div class="form-group">
                     <label for="resetEmail">Account Email</label>
                     <input type="email" id="resetEmail" autocomplete="email" required>
@@ -122,7 +114,6 @@
                     <input type="password" id="newPassword" autocomplete="new-password" required>
                 </div>
                 <button type="submit" class="btn-full btn-blue">Update Password</button>
-
                 <div style="text-align: center; margin-top: 1.5rem;">
                     <a href="#" id="backToLoginLink" class="auth-link"><i class="fa-solid fa-arrow-left"></i> Back to Sign In</a>
                 </div>
@@ -143,18 +134,15 @@
                 <p>&copy; <span id="year"></span> AgriMarket SL. Empowering farmers across Sierra Leone.</p>
                 <span class="powered-by">Powered by Hassan Conteh</span>
                 <div class="footer-links">
-                    <a href="#">Privacy Policy</a>
-                    <a href="#">Support</a>
-                    <a href="#">Contact Us</a>
+                    <a href="#" onclick="showPage('privacy'); return false;">Privacy Policy</a>
+                    <a href="#" onclick="showPage('support'); return false;">Support</a>
+                    <a href="#" onclick="showPage('contact'); return false;">Contact Us</a>
                 </div>
             </div>
         </div>
     </footer>
 
-    <script>
-        document.getElementById('year').textContent = new Date().getFullYear();
-    </script>
-
+    <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
     <script src="app.js"></script>
 </body>
 </html>
