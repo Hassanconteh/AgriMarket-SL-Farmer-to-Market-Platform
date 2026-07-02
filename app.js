@@ -1,4 +1,4 @@
-// App logic migrated to Firebase Auth + Firestore
+// App logic migrated to Firebase Auth + Firestore with server-side queries, pagination and better UX
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=500&q=80";
 
@@ -9,6 +9,15 @@ const authModal     = document.getElementById('authModal');
 const loginForm     = document.getElementById('loginForm');
 const registerForm  = document.getElementById('registerForm');
 const resetForm     = document.getElementById('resetForm');
+
+const cropContainer = document.getElementById('cropCardsContainer');
+const resultCountEl = document.getElementById('resultCount');
+
+// Pagination & query state
+let pageSize = 8;
+let lastVisible = null; // last document snapshot for pagination
+let isLoading = false;
+let currentQueryOptions = { searchTerm: '', location: 'All' };
 
 function triggerToast(message) {
     const container = document.getElementById('toastContainer');
@@ -74,19 +83,53 @@ function waitForFirebase(timeout = 10000) {
     });
 }
 
-// Render listings (same as before)
-async function renderListings(listings) {
-    const container   = document.getElementById('cropCardsContainer');
-    const resultCount = document.getElementById('resultCount');
-    container.innerHTML = '';
+function mapFirebaseError(err) {
+    if (!err) return 'An unknown error occurred.';
+    // Firebase errors often have a code property (auth/xxx). Firestore permission issues may be strings.
+    const code = err.code || (err && err.message) || '';
+    if (typeof code === 'string') {
+        if (code.includes('auth/invalid-email')) return 'The email address is not valid.';
+        if (code.includes('auth/email-already-in-use')) return 'This email is already registered.';
+        if (code.includes('auth/wrong-password')) return 'Incorrect password.';
+        if (code.includes('auth/user-not-found')) return 'No account found for that email.';
+        if (code.includes('auth/weak-password')) return 'Password is too weak (minimum 6 characters).';
+        if (code.includes('auth/too-many-requests')) return 'Too many attempts. Try again later.';
+        if (code.includes('permission-denied')) return 'Access denied. You do not have permission to view this data.';
+        if (code.includes('not-found')) return 'Requested data was not found.';
+        if (code.includes('network-request-failed')) return 'Network error. Check your connection.';
+    }
+    // Fallback to err.message when available
+    return err.message || String(err);
+}
+
+function setLoading(state) {
+    isLoading = state;
+    if (state) {
+        // simple inline loader — keeps UX improvements minimal and self-contained
+        cropContainer.innerHTML = '<div class="loader" aria-busy="true" style="grid-column:1/-1;padding:2rem;text-align:center;">Loading listings...</div>';
+        resultCountEl.textContent = 'Loading...';
+    }
+}
+
+function renderEmptyState() {
+    cropContainer.innerHTML = `
+      <div style="grid-column:1/-1;padding:2rem;text-align:center;">
+        <h3>No listings found</h3>
+        <p class="text-muted">We couldn't find any market listings matching your search. Try different keywords or select another region.</p>
+      </div>
+    `;
+    resultCountEl.textContent = '0 listings';
+}
+
+function renderListings(listings, append = false) {
+    if (!append) cropContainer.innerHTML = '';
 
     if (!listings || listings.length === 0) {
-        container.innerHTML = '<p class="text-muted" style="grid-column:1/-1;padding:2rem 0;">No listings found for your search.</p>';
-        resultCount.textContent = '0 listings';
+        if (!append) renderEmptyState();
         return;
     }
 
-    resultCount.textContent = `${listings.length} listing${listings.length !== 1 ? 's' : ''}`;
+    resultCountEl.textContent = `${listings.length} listing${listings.length !== 1 ? 's' : ''}`;
 
     listings.forEach((item) => {
         const card = document.createElement('div');
@@ -107,39 +150,159 @@ async function renderListings(listings) {
                 ${item.phone ? `<button class="btn-contact" onclick="window.location.href='tel:${item.phone}'"><i class="fa-solid fa-phone"></i> Contact Farmer</button>` : ''}
             </div>
         `;
-        container.appendChild(card);
+        cropContainer.appendChild(card);
     });
 }
 
-// Fetch crops from Firestore and optionally filter client-side
-async function fetchCrops() {
+function renderPaginationControls(hasMore = false) {
+    // Remove old controls
+    const old = document.getElementById('paginationControls');
+    if (old) old.remove();
+
+    const wrapper = document.createElement('div');
+    wrapper.id = 'paginationControls';
+    wrapper.style.gridColumn = '1/-1';
+    wrapper.style.display = 'flex';
+    wrapper.style.justifyContent = 'center';
+    wrapper.style.marginTop = '1rem';
+
+    const loadMore = document.createElement('button');
+    loadMore.className = 'btn-outline';
+    loadMore.textContent = 'Load more';
+    loadMore.disabled = !hasMore;
+    loadMore.addEventListener('click', async () => {
+        await loadMoreCrops();
+    });
+
+    wrapper.appendChild(loadMore);
+    cropContainer.parentNode.appendChild(wrapper);
+}
+
+// Server-side Firestore fetch with pagination. Supports location filter and prefix-search on name_lower
+async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page = 1, pageSizeLocal = pageSize, startAfterDoc = null } = {}) {
     const db = window.firebaseDb;
-    const { collection, getDocs } = window.dbFns;
+    const { collection, getDocs, query, where, orderBy, limit, startAfter } = window.dbFns;
+
     try {
-        const snap = await getDocs(collection(db, 'crops'));
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        return data;
+        const cropsCol = collection(db, 'crops');
+        let q = null;
+
+        // Build query parts
+        const constraints = [];
+
+        if (location && location !== 'All') {
+            constraints.push(where('location', '==', location));
+        }
+
+        // For server-side search we attempt a prefix search on a lowercase field 'name_lower'.
+        // This requires that documents include a 'name_lower' string field.
+        const normalizedSearch = (searchTerm || '').trim().toLowerCase();
+        if (normalizedSearch) {
+            // Firestore prefix range trick
+            const end = normalizedSearch + '\\uf8ff';
+            constraints.push(where('name_lower', '>=', normalizedSearch));
+            constraints.push(where('name_lower', '<=', end));
+        }
+
+        // If constraints are present, compose a query. We'll order by name_lower if searching, otherwise by created_at or name.
+        if (normalizedSearch) {
+            constraints.push(orderBy('name_lower'));
+        } else {
+            // If collection has a created_at field, that would be better. Fallback to name ordering.
+            try {
+                constraints.push(orderBy('created_at', 'desc'));
+            } catch (e) {
+                constraints.push(orderBy('name'));
+            }
+        }
+
+        // Pagination
+        constraints.push(limit(pageSizeLocal));
+        if (startAfterDoc) {
+            constraints.push(startAfter(startAfterDoc));
+        }
+
+        q = query(cropsCol, ...constraints);
+
+        const snap = await getDocs(q);
+        const docs = snap.docs.map((d) => ({ id: d.id, ...d.data(), _snap: d }));
+        const hasMore = docs.length === pageSizeLocal;
+        // Save lastVisible for next page
+        lastVisible = docs.length ? docs[docs.length - 1]._snap : null;
+
+        // Strip _snap before returning
+        const clean = docs.map(({ _snap, ...rest }) => rest);
+        return { data: clean, hasMore };
     } catch (err) {
-        console.error('Failed to load crops from Firestore', err);
-        triggerToast('Unable to load market listings.');
-        return [];
+        // If the server-side search failed because documents lack 'name_lower', fallback to a simple unfiltered read
+        const msg = String(err && err.message ? err.message : err);
+        if (msg.includes('Field') || msg.includes('name_lower') || msg.includes('invalid-argument')) {
+            console.warn('Prefix search failed, falling back to client-side search. Error:', err);
+            // get all (or location-filtered) docs then filter client-side
+            try {
+                const cropsCol = collection(db, 'crops');
+                let q2 = null;
+                const parts = [];
+                if (location && location !== 'All') parts.push(where('location', '==', location));
+                parts.push(limit(pageSizeLocal));
+                if (startAfterDoc) parts.push(startAfter(startAfterDoc));
+                // Order by name for consistent results
+                parts.push(orderBy('name'));
+                q2 = query(cropsCol, ...parts);
+                const snap = await getDocs(q2);
+                const docs = snap.docs.map((d) => ({ id: d.id, ...d.data(), _snap: d }));
+                lastVisible = docs.length ? docs[docs.length - 1]._snap : null;
+                const clean = docs.map(({ _snap, ...rest }) => rest);
+                return { data: clean, hasMore: clean.length === pageSizeLocal };
+            } catch (err2) {
+                throw err2; // let outer handler map error
+            }
+        }
+
+        throw err; // rethrow for outer handler
+    }
+}
+
+async function loadInitialCrops() {
+    setLoading(true);
+    lastVisible = null;
+    try {
+        const { data, hasMore } = await fetchCropsFromFirestore({ searchTerm: currentQueryOptions.searchTerm, location: currentQueryOptions.location, pageSizeLocal: pageSize, startAfterDoc: null });
+        setLoading(false);
+        renderListings(data || [], false);
+        renderPaginationControls(hasMore);
+    } catch (err) {
+        setLoading(false);
+        console.error('Failed to load crops', err);
+        triggerToast(mapFirebaseError(err));
+        renderEmptyState();
+    }
+}
+
+async function loadMoreCrops() {
+    if (!lastVisible) {
+        triggerToast('No more listings');
+        return;
+    }
+    setLoading(true);
+    try {
+        const { data, hasMore } = await fetchCropsFromFirestore({ searchTerm: currentQueryOptions.searchTerm, location: currentQueryOptions.location, pageSizeLocal: pageSize, startAfterDoc: lastVisible });
+        setLoading(false);
+        if (data && data.length) renderListings(data, true);
+        renderPaginationControls(hasMore);
+    } catch (err) {
+        setLoading(false);
+        console.error('Failed to load more crops', err);
+        triggerToast(mapFirebaseError(err));
     }
 }
 
 async function applyFilters() {
-    const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
+    // Called when user submits search/filter. Reset pagination and load from server with filters
+    const searchTerm = document.getElementById('searchInput').value.trim();
     const location   = document.getElementById('locationFilter').value;
-
-    let listings = await fetchCrops();
-
-    if (searchTerm) {
-        listings = listings.filter(l => (l.name || '').toLowerCase().includes(searchTerm));
-    }
-    if (location && location !== 'All') {
-        listings = listings.filter(l => l.location === location);
-    }
-
-    await renderListings(listings);
+    currentQueryOptions = { searchTerm, location };
+    await loadInitialCrops();
 }
 
 async function initApp() {
@@ -173,13 +336,12 @@ async function initApp() {
                     triggerToast('You have been securely logged out.');
                 } catch (err) {
                     console.error('Sign out failed', err);
-                    triggerToast('Logout failed');
+                    triggerToast(mapFirebaseError(err));
                 }
             });
 
-            // Load crops
-            const crops = await fetchCrops();
-            renderListings(crops || []);
+            // Load initial crops for signed-in user
+            await loadInitialCrops();
         } else {
             // No user
             landingPage.style.display = 'flex';
@@ -210,7 +372,7 @@ async function initApp() {
             triggerToast('Account created! Please check your email to confirm (if required by your Firebase settings).');
         } catch (err) {
             console.error('Sign up failed', err);
-            triggerToast(err.message || 'Sign up failed');
+            triggerToast(mapFirebaseError(err));
         }
     });
 
@@ -225,7 +387,7 @@ async function initApp() {
             closeModal();
         } catch (err) {
             console.error('Sign in failed', err);
-            triggerToast('Invalid email or password.');
+            triggerToast(mapFirebaseError(err));
         }
     });
 
@@ -241,7 +403,7 @@ async function initApp() {
             closeModal();
         } catch (err) {
             console.error('Password reset failed', err);
-            triggerToast(err.message || 'Password reset failed');
+            triggerToast(mapFirebaseError(err));
         }
     });
 
