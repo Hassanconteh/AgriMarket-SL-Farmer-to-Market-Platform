@@ -103,16 +103,16 @@
 
             <form id="resetForm" class="auth-form">
                 <h3 style="color: var(--sl-blue); margin-bottom: 0.5rem;">Reset Password</h3>
-                <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1.5rem;">Enter your email and a new password below.</p>
+                <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1.5rem;">Enter your email to receive a password reset link.</p>
                 <div class="form-group">
                     <label for="resetEmail">Account Email</label>
                     <input type="email" id="resetEmail" autocomplete="email" required>
                 </div>
-                <div class="form-group">
+                <div class="form-group" style="display:none;">
                     <label for="newPassword">New Password</label>
-                    <input type="password" id="newPassword" autocomplete="new-password" required>
+                    <input type="password" id="newPassword" autocomplete="new-password">
                 </div>
-                <button type="submit" class="btn-full btn-blue">Update Password</button>
+                <button type="submit" class="btn-full btn-blue">Send Reset Email</button>
                 <div style="text-align: center; margin-top: 1.5rem;">
                     <a href="#" id="backToLoginLink" class="auth-link"><i class="fa-solid fa-arrow-left"></i> Back to Sign In</a>
                 </div>
@@ -147,8 +147,10 @@
 <script type="module">
   // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-  import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
-  // TODO: Add SDKs for Firebase products that you want to use
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+  import { getFirestore, collection, getDocs, query, where, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  // TODO: Add SDKs for other Firebase products that you want to use
   // https://firebase.google.com/docs/web/setup#available-libraries
 
   // Your web app's Firebase configuration
@@ -165,14 +167,39 @@
 
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const auth = getAuth(app);
   const db = getFirestore(app);
 
-// Make 'db' available to your app.js
-    window.db = db;
-  window.collection = collection;
-  window.getDocs = getDocs;
-  window.query = query;
-  window.where = where;
+  // Expose commonly used functions to the non-module app.js script
+  window.firebaseAuth = auth;
+  window.firebaseDb = db;
+  window.authFns = {
+    onAuthStateChanged,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    sendPasswordResetEmail
+  };
+  window.dbFns = {
+    collection,
+    getDocs,
+    query,
+    where,
+    doc,
+    setDoc,
+    getDoc
+  };
+
+  // Optional quick console helper
+  window.testFirestore = async function () {
+    try {
+      const snap = await getDocs(collection(db, 'crops'));
+      console.log('crops', snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error('Firestore test failed', err);
+    }
+  };
 </script>
     
 </body>
