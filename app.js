@@ -1,9 +1,3 @@
-const SUPABASE_URL = 'https://tmguwkueepgabbzsehdu.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZ3V3a3VlZXBnYWJienNlaGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMzMwNTgsImV4cCI6MjA5NzYwOTA1OH0.uNw6FAn9OmUAZVSKhBb8IgKsoEJkMWwN6_yFWzRTwPw';
-
-const {createClient} = window.supabase;
-const supabase = createClient(https://tmguwkueepgabbzsehdu.supabase.co, eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZ3V3a3VlZXBnYWJienNlaGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMzMwNTgsImV4cCI6MjA5NzYwOTA1OH0.uNw6FAn9OmUAZVSKhBb8IgKsoEJkMWwN6_yFWzRTwPw);
-
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=500&q=80";
 
 const landingPage   = document.getElementById('landingPage');
@@ -67,7 +61,7 @@ function showAuthTabs() {
 }
 
 async function checkAuthState() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { getDocs, collection } = window;
 
     if (user) {
         landingPage.style.display = 'none';
@@ -79,10 +73,11 @@ async function checkAuthState() {
         `;
         document.getElementById('navLogoutBtn').addEventListener('click', handleLogout);
 
-        const { data: crops, error } = await supabase.from('crops').select('*');
+        const querySnapshot = await getDocs(collection(db, "crops"));
+        const crops = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         if (error){
             console.error('crops select failed: ', error);
-            renderListings(crops || []);
+            renderListings(crops);
     } else {
         landingPage.style.display = 'flex';
         dashboardApp.style.display = 'none';
@@ -195,14 +190,20 @@ async function renderListings(listings) {
 
 async function applyFilters() {
     const searchTerm = document.getElementById('searchInput').value.trim();
-    const location   = document.getElementById('locationFilter').value;
+    const location = document.getElementById('locationFilter').value;
+    
+    let q = collection(db, "crops");
+    const querySnapshot = await getDocs(q);
+    let data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    let query = supabase.from('crops').select('*');
-    if (searchTerm)         query = query.ilike('name', `%${searchTerm}%`);
-    if (location !== 'All') query = query.eq('location', location);
+    if (searchTerm) {
+        data = data.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+    if (location !== 'All') {
+        data = data.filter(item => item.location === location);
+    }
 
-    const { data, error } = await query;
-    if (!error) renderListings(data || []);
+    renderListings(data);
 }
 
 document.getElementById('searchBtn').addEventListener('click', applyFilters);
