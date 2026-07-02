@@ -1,3 +1,5 @@
+// App logic migrated to Firebase Auth + Firestore
+
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=500&q=80";
 
 const landingPage   = document.getElementById('landingPage');
@@ -60,104 +62,25 @@ function showAuthTabs() {
     document.getElementById('authTabsContainer').style.display = 'flex';
 }
 
-async function checkAuthState() {
-    const { getDocs, collection } = window;
-
-    if (user) {
-        landingPage.style.display = 'none';
-        dashboardApp.style.display = 'block';
-
-        navMenu.innerHTML = `
-            <span class="nav-link"><i class="fa-solid fa-user-check"></i> ${user.email}</span>
-            <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
-        `;
-        document.getElementById('navLogoutBtn').addEventListener('click', handleLogout);
-
-        const querySnapshot = await getDocs(collection(db, "crops"));
-        const crops = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (error){
-            console.error('crops select failed: ', error);
-            renderListings(crops);
-    } else {
-        landingPage.style.display = 'flex';
-        dashboardApp.style.display = 'none';
-        navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
-        document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
-    }
+// Wait for Firebase module script to expose helpers on window
+function waitForFirebase(timeout = 10000) {
+    return new Promise((resolve, reject) => {
+        const start = Date.now();
+        (function check() {
+            if (window.firebaseAuth && window.firebaseDb && window.authFns && window.dbFns) return resolve();
+            if (Date.now() - start > timeout) return reject(new Error('Firebase did not initialize in time'));
+            setTimeout(check, 100);
+        })();
+    });
 }
 
-async function handleLogout() {
-    await supabase.auth.signOut();
-    triggerToast("You have been securely logged out.");
-    checkAuthState();
-}
-
-const staticPages = {
-    privacy: { title: "Privacy Policy", content: "<h3>Privacy Commitment</h3><p>We protect your data.</p>" },
-    support: { title: "Support",        content: "<h3>Need Help?</h3><p>Contact hassanconteh132@gmail.com</p>" },
-    contact: { title: "Contact Us",     content: "<h3>Contact Admin</h3><p>Phone: +232 76 786 944</p>" }
-};
-
-function showPage(pageKey) {
-    document.getElementById('landingPage').style.display        = 'none';
-    document.getElementById('dashboardApp').style.display       = 'none';
-    document.getElementById('staticPageContainer').style.display = 'block';
-    const page = staticPages[pageKey];
-    document.getElementById('staticContent').innerHTML = `<h2>${page.title}</h2><div style="margin-top:1rem;">${page.content}</div>`;
-}
-
-function showDashboard() {
-    document.getElementById('staticPageContainer').style.display = 'none';
-    checkAuthState();
-}
-
-registerForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name     = document.getElementById('regName').value;
-    const email    = document.getElementById('regEmail').value;
-    const password = document.getElementById('regPassword').value;
-
-    const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
-    if (error) triggerToast(error.message);
-    else {
-        closeModal();
-        triggerToast("Account created! Please check your email to confirm.");
-    }
-});
-
-loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email    = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) triggerToast("Invalid email or password.");
-    else {
-        closeModal();
-        checkAuthState();
-    }
-});
-
-resetForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email       = document.getElementById('resetEmail').value;
-    const newPassword = document.getElementById('newPassword').value;
-
-    const { error } = await supabase.auth.updateUser({ email, password: newPassword });
-    if (error) triggerToast(error.message);
-    else {
-        triggerToast("Password updated successfully. Please sign in.");
-        showAuthTabs();
-        switchTab('login');
-    }
-});
-
+// Render listings (same as before)
 async function renderListings(listings) {
     const container   = document.getElementById('cropCardsContainer');
     const resultCount = document.getElementById('resultCount');
     container.innerHTML = '';
 
-    if (listings.length === 0) {
+    if (!listings || listings.length === 0) {
         container.innerHTML = '<p class="text-muted" style="grid-column:1/-1;padding:2rem 0;">No listings found for your search.</p>';
         resultCount.textContent = '0 listings';
         return;
@@ -176,7 +99,7 @@ async function renderListings(listings) {
                     ${item.category ? `<span class="badge badge-category">${item.category}</span>` : ''}
                 </div>
                 <h3 class="card-title">${item.name}</h3>
-                <span class="card-price">SLLE ${Number(item.price).toLocaleString()}</span>
+                <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
                 <div class="card-meta">
                     ${item.farmer_name ? `<p><i class="fa-solid fa-user"></i> ${item.farmer_name}</p>` : ''}
                     ${item.phone ? `<p><i class="fa-solid fa-phone"></i> <a href="tel:${item.phone}">${item.phone}</a></p>` : ''}
@@ -188,59 +111,158 @@ async function renderListings(listings) {
     });
 }
 
-async function applyFilters() {
-    const searchTerm = document.getElementById('searchInput').value.trim();
-    const location = document.getElementById('locationFilter').value;
-    
-    let q = collection(db, "crops");
-    const querySnapshot = await getDocs(q);
-    let data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    if (searchTerm) {
-        data = data.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+// Fetch crops from Firestore and optionally filter client-side
+async function fetchCrops() {
+    const db = window.firebaseDb;
+    const { collection, getDocs } = window.dbFns;
+    try {
+        const snap = await getDocs(collection(db, 'crops'));
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return data;
+    } catch (err) {
+        console.error('Failed to load crops from Firestore', err);
+        triggerToast('Unable to load market listings.');
+        return [];
     }
-    if (location !== 'All') {
-        data = data.filter(item => item.location === location);
-    }
-
-    renderListings(data);
 }
 
-document.getElementById('searchBtn').addEventListener('click', applyFilters);
+async function applyFilters() {
+    const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
+    const location   = document.getElementById('locationFilter').value;
 
-document.getElementById('searchInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') applyFilters();
-});
+    let listings = await fetchCrops();
 
-document.getElementById('closeModal').addEventListener('click', closeModal);
+    if (searchTerm) {
+        listings = listings.filter(l => (l.name || '').toLowerCase().includes(searchTerm));
+    }
+    if (location && location !== 'All') {
+        listings = listings.filter(l => l.location === location);
+    }
 
-authModal.addEventListener('click', (e) => {
-    if (e.target === authModal) closeModal();
-});
+    await renderListings(listings);
+}
 
-document.getElementById('tabLogin').addEventListener('click', () => {
-    showAuthTabs();
-    switchTab('login');
-});
+async function initApp() {
+    try {
+        await waitForFirebase();
+    } catch (err) {
+        console.error(err);
+        triggerToast('Firebase failed to initialize.');
+        return;
+    }
 
-document.getElementById('tabRegister').addEventListener('click', () => {
-    showAuthTabs();
-    switchTab('register');
-});
+    const auth = window.firebaseAuth;
+    const db = window.firebaseDb;
+    const { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } = window.authFns;
+    const { collection, getDocs, doc, setDoc } = window.dbFns;
 
-document.getElementById('forgotPasswordLink').addEventListener('click', (e) => {
-    e.preventDefault();
-    hideAuthTabs();
-    switchTab('reset');
-});
+    // Auth state observer
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            // User is signed in
+            landingPage.style.display = 'none';
+            dashboardApp.style.display = 'block';
 
-document.getElementById('backToLoginLink').addEventListener('click', (e) => {
-    e.preventDefault();
-    showAuthTabs();
-    switchTab('login');
-});
+            navMenu.innerHTML = `
+                <span class="nav-link"><i class="fa-solid fa-user-check"></i> ${user.email}</span>
+                <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
+            `;
+            document.getElementById('navLogoutBtn').addEventListener('click', async () => {
+                try {
+                    await signOut(auth);
+                    triggerToast('You have been securely logged out.');
+                } catch (err) {
+                    console.error('Sign out failed', err);
+                    triggerToast('Logout failed');
+                }
+            });
 
-document.getElementById('btnStartLogin').addEventListener('click', () => openModal('login'));
-document.getElementById('btnStartRegister').addEventListener('click', () => openModal('register'));
+            // Load crops
+            const crops = await fetchCrops();
+            renderListings(crops || []);
+        } else {
+            // No user
+            landingPage.style.display = 'flex';
+            dashboardApp.style.display = 'none';
+            navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
+            document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
+        }
+    });
 
-document.addEventListener('DOMContentLoaded', checkAuthState);
+    // Register
+    registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name     = document.getElementById('regName').value;
+        const email    = document.getElementById('regEmail').value;
+        const password = document.getElementById('regPassword').value;
+
+        try {
+            const cred = await createUserWithEmailAndPassword(auth, email, password);
+            const uid = cred.user.uid;
+            // create a user profile document
+            try {
+                await setDoc(doc(db, 'users', uid), { full_name: name, email, created_at: new Date().toISOString() });
+            } catch (err) {
+                console.warn('Failed to write user profile', err);
+            }
+
+            closeModal();
+            triggerToast('Account created! Please check your email to confirm (if required by your Firebase settings).');
+        } catch (err) {
+            console.error('Sign up failed', err);
+            triggerToast(err.message || 'Sign up failed');
+        }
+    });
+
+    // Login
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email    = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+            closeModal();
+        } catch (err) {
+            console.error('Sign in failed', err);
+            triggerToast('Invalid email or password.');
+        }
+    });
+
+    // Password reset (send reset email)
+    resetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('resetEmail').value;
+        try {
+            await sendPasswordResetEmail(auth, email);
+            triggerToast('Password reset email sent. Check your inbox.');
+            showAuthTabs();
+            switchTab('login');
+            closeModal();
+        } catch (err) {
+            console.error('Password reset failed', err);
+            triggerToast(err.message || 'Password reset failed');
+        }
+    });
+
+    // UI interactions
+    document.getElementById('searchBtn').addEventListener('click', applyFilters);
+    document.getElementById('searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
+    document.getElementById('closeModal').addEventListener('click', closeModal);
+    authModal.addEventListener('click', (e) => { if (e.target === authModal) closeModal(); });
+    document.getElementById('tabLogin').addEventListener('click', () => { showAuthTabs(); switchTab('login'); });
+    document.getElementById('tabRegister').addEventListener('click', () => { showAuthTabs(); switchTab('register'); });
+    document.getElementById('forgotPasswordLink').addEventListener('click', (e) => { e.preventDefault(); hideAuthTabs(); switchTab('reset'); });
+    document.getElementById('backToLoginLink').addEventListener('click', (e) => { e.preventDefault(); showAuthTabs(); switchTab('login'); });
+    document.getElementById('btnStartLogin').addEventListener('click', () => openModal('login'));
+    document.getElementById('btnStartRegister').addEventListener('click', () => openModal('register'));
+
+    // Load initial UI state: we rely on onAuthStateChanged to set the proper view
+}
+
+// Initialize app when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
