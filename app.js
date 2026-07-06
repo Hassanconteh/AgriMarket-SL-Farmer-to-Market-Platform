@@ -360,6 +360,11 @@ async function initApp() {
 
         try {
             const cred = await createUserWithEmailAndPassword(auth, email, password);
+            // Save user profile...
+
+            landingPage.style.display = "none";
+            dashboardApp.style.display = "block";
+            await loadInitialCrops();
             const uid = cred.user.uid;
             // create a user profile document
             try {
@@ -384,6 +389,9 @@ async function initApp() {
 
         try {
             await signInWithEmailAndPassword(auth, email, password);
+            landingPage.style.display = "none";
+            dashboardApp.style.display = "block";
+            await loadInitialCrops();
             closeModal();
         } catch (err) {
             console.error('Sign in failed', err);
