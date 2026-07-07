@@ -165,24 +165,6 @@ async function seedDatabase(){
 
     alert("100 crop listings added successfully!");
 }
-
-async function seedDatabase(){
-
-    for(const crop of crops){
-
-        await addDoc(collection(db,"crops"),{
-            ...crop,
-            created_at: serverTimestamp()
-        });
-
-        console.log(crop.name + " added");
-    }
-
-    alert("Database successfully seeded!");
-}
-
-seedDatabase();
-
 </script>
 
 </body>
