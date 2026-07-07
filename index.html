@@ -9,19 +9,826 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>">
     <link rel="stylesheet" href="styles.css">
+
+    <style>
+        /* ===== NEW SECTION STYLES ===== */
+        :root {
+            --agri-green: #16a34a;
+            --agri-green-dark: #15803d;
+            --agri-green-light: #22c55e;
+            --agri-blue: #2563eb;
+            --agri-blue-light: #3b82f6;
+            --agri-cream: #fefce8;
+            --agri-earth: #92400e;
+            --agri-sand: #f5f0e8;
+        }
+
+        .landing-sections { display: none; }
+        #landingPage.hero.full-screen ~ .landing-sections,
+        body.show-landing .landing-sections { display: block; }
+
+        /* Section utilities */
+        .ls-section {
+            padding: 5rem 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .ls-section-alt { background: var(--agri-sand); }
+        .ls-section-alt .ls-section { margin: 0 auto; }
+
+        .ls-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--agri-green);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .ls-label::before {
+            content: '';
+            width: 24px;
+            height: 2px;
+            background: var(--agri-green);
+            display: inline-block;
+        }
+        .ls-title {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+        .ls-subtitle {
+            font-size: 1.05rem;
+            color: #555;
+            line-height: 1.7;
+            max-width: 600px;
+        }
+        .ls-divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, #d1d5db, transparent);
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* About grid */
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 3rem;
+            align-items: center;
+        }
+        @media (min-width: 768px) {
+            .about-grid { grid-template-columns: 1fr 1fr; }
+            .ls-title { font-size: 2.75rem; }
+        }
+        .about-image {
+            border-radius: 1rem;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 4/3;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+        }
+        .about-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .about-image-badge {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background: white;
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+        .about-image-badge i { color: var(--agri-green); font-size: 1.2rem; }
+        .about-image-badge span { font-weight: 600; font-size: 0.85rem; color: #1a1a1a; }
+        .about-image-badge small { font-size: 0.7rem; color: #888; display: block; }
+
+        /* Stats row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 2.5rem;
+        }
+        @media (min-width: 768px) {
+            .stats-row { grid-template-columns: repeat(4, 1fr); }
+        }
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem 1rem;
+            background: white;
+            border-radius: 0.75rem;
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        .stat-card:hover {
+            border-color: var(--agri-green);
+            box-shadow: 0 4px 20px rgba(22,163,74,0.1);
+            transform: translateY(-2px);
+        }
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--agri-green);
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #888;
+            margin-top: 0.25rem;
+        }
+
+        /* Services grid */
+        .services-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+        @media (min-width: 768px) {
+            .services-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .services-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        .service-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 1rem;
+            padding: 2rem;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .service-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--agri-green);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.4s ease;
+        }
+        .service-card:hover::before { transform: scaleX(1); }
+        .service-card:hover {
+            border-color: rgba(22,163,74,0.3);
+            box-shadow: 0 10px 40px rgba(22,163,74,0.08);
+            transform: translateY(-4px);
+        }
+        .service-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            margin-bottom: 1.25rem;
+        }
+        .service-icon-green { background: #dcfce7; color: var(--agri-green); }
+        .service-icon-blue { background: #dbeafe; color: var(--agri-blue); }
+        .service-icon-earth { background: #fef3c7; color: var(--agri-earth); }
+        .service-card h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 0.6rem;
+        }
+        .service-card p {
+            font-size: 0.9rem;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+        .service-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+        .service-tag {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.25rem 0.65rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 999px;
+            color: #888;
+        }
+
+        /* How it works */
+        .steps-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+        @media (min-width: 768px) {
+            .steps-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        .step-card {
+            text-align: center;
+            position: relative;
+            padding: 2rem 1.5rem;
+        }
+        .step-number {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--agri-green);
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.25rem;
+            position: relative;
+            z-index: 1;
+        }
+        .step-card:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 2.4rem;
+            left: calc(50% + 30px);
+            width: calc(100% - 60px);
+            height: 2px;
+            background: repeating-linear-gradient(to right, var(--agri-green) 0, var(--agri-green) 6px, transparent 6px, transparent 12px);
+            display: none;
+        }
+        @media (min-width: 768px) {
+            .step-card:not(:last-child)::after { display: block; }
+        }
+        .step-card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 0.5rem;
+        }
+        .step-card p {
+            font-size: 0.85rem;
+            color: #777;
+            line-height: 1.6;
+        }
+
+        /* Crops showcase */
+        .crops-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 3rem;
+        }
+        @media (min-width: 768px) {
+            .crops-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        .crop-showcase {
+            border-radius: 1rem;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 1;
+            cursor: pointer;
+        }
+        .crop-showcase img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+        .crop-showcase:hover img { transform: scale(1.08); }
+        .crop-showcase-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 1rem;
+        }
+        .crop-showcase-overlay h4 { color: white; font-size: 1rem; font-weight: 600; }
+        .crop-showcase-overlay span { color: rgba(255,255,255,0.7); font-size: 0.75rem; }
+
+        /* Testimonials */
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+        @media (min-width: 768px) {
+            .testimonials-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        .testimonial-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 1rem;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+        .testimonial-card:hover {
+            box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+            transform: translateY(-2px);
+        }
+        .testimonial-stars {
+            color: #f59e0b;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 0.15rem;
+        }
+        .testimonial-card blockquote {
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.7;
+            margin-bottom: 1.5rem;
+            font-style: italic;
+        }
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .testimonial-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #e5e7eb;
+        }
+        .testimonial-name { font-weight: 600; font-size: 0.85rem; color: #1a1a1a; }
+        .testimonial-role { font-size: 0.7rem; color: #999; }
+
+        /* CTA section */
+        .cta-box {
+            background: linear-gradient(135deg, var(--agri-green-dark), var(--agri-green));
+            border-radius: 1.5rem;
+            padding: 3rem 2rem;
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .cta-box::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -30%;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.05);
+        }
+        .cta-box::after {
+            content: '';
+            position: absolute;
+            bottom: -40%;
+            left: -20%;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.04);
+        }
+        .cta-box h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            position: relative;
+            z-index: 1;
+        }
+        .cta-box p {
+            opacity: 0.9;
+            font-size: 1.05rem;
+            margin-bottom: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: white;
+            color: var(--agri-green-dark);
+            padding: 0.85rem 2rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+        .cta-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+
+        /* Reveal animations */
+        .reveal {
+            opacity: 0;
+            transform: translateY(25px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Desktop nav links */
+        .nav-links {
+            display: none;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        @media (min-width: 768px) {
+            .nav-links { display: flex; }
+        }
+        .nav-links a {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #555;
+            text-decoration: none;
+            padding: 0.45rem 0.85rem;
+            border-radius: 0.5rem;
+            transition: all 0.25s ease;
+        }
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: var(--agri-green);
+            background: rgba(22,163,74,0.06);
+        }
+
+        /* Mobile hamburger */
+        .mobile-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background: none;
+            cursor: pointer;
+            color: #555;
+            font-size: 1rem;
+        }
+        @media (min-width: 768px) {
+            .mobile-toggle { display: none; }
+        }
+        .mobile-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            z-index: 999;
+            padding: 1rem;
+        }
+        .mobile-menu.open { display: block; }
+        .mobile-menu a {
+            display: block;
+            padding: 0.7rem 1rem;
+            font-size: 0.85rem;
+            color: #555;
+            text-decoration: none;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+        }
+        .mobile-menu a:hover { background: #f3f4f6; color: var(--agri-green); }
+    </style>
 </head>
 <body>
     <header class="navbar float-in">
         <div class="logo"><i class="fa-solid fa-leaf"></i> AgriMarket SL</div>
+
+        <!-- Desktop nav links (landing only) -->
+        <nav id="landingNav" class="nav-links" aria-label="Main">
+            <a href="#hero" class="active">Home</a>
+            <a href="#about">About</a>
+            <a href="#services">Services</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#crops">Crops</a>
+            <a href="#testimonials">Reviews</a>
+            <a href="#cta-section">Get Started</a>
+        </nav>
+
+        <!-- Mobile toggle -->
+        <button class="mobile-toggle" id="mobileToggle" aria-label="Menu">
+            <i class="fa-solid fa-bars" id="mobileIcon"></i>
+        </button>
+
+        <!-- Mobile menu -->
+        <div class="mobile-menu" id="mobileMenu">
+            <a href="#hero">Home</a>
+            <a href="#about">About</a>
+            <a href="#services">Services</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#crops">Crops</a>
+            <a href="#testimonials">Reviews</a>
+            <a href="#cta-section">Get Started</a>
+        </div>
+
+        <!-- Auth nav (original, managed by app.js) -->
         <nav id="navMenu" aria-label="Account"></nav>
     </header>
 
+    <!-- Mobile menu overlay handling -->
     <div id="landingPage" class="hero full-screen float-in" style="animation-delay: 0.2s;">
         <div class="hero-content">
             <h1>Connecting Sierra Leone's Farmers to the World</h1>
             <p>Sign in to access real-time crop prices, contact local farmers, and view agricultural data.</p>
         </div>
     </div>
+
+    <!-- ===== LANDING PAGE SECTIONS ===== -->
+    <div class="landing-sections" id="landingSections">
+
+        <!-- About Section -->
+        <div class="ls-divider"></div>
+        <section id="about" class="ls-section reveal">
+            <div class="about-grid">
+                <div>
+                    <div class="ls-label">About AgriMarket SL</div>
+                    <h2 class="ls-title">Empowering Farmers with Real-Time Market Access</h2>
+                    <p class="ls-subtitle">
+                        AgriMarket SL bridges the gap between Sierra Leone's hardworking farmers and buyers across the country. We provide live crop pricing, direct farmer contacts, and regional market data — all in one platform built for the agricultural community.
+                    </p>
+                    <p style="font-size: 0.95rem; color: #666; line-height: 1.7; margin-top: 1rem;">
+                        Founded with a mission to eliminate middlemen and bring transparency, we ensure that every farmer gets a fair deal and every buyer finds quality produce at the right price.
+                    </p>
+                </div>
+                <div class="about-image">
+                    <img src="https://picsum.photos/seed/sl-farm-field/600/450.jpg" alt="Sierra Leone Farmland">
+                    <div class="about-image-badge">
+                        <i class="fa-solid fa-seedling"></i>
+                        <div>
+                            <span>Since 2023</span>
+                            <small>Serving Sierra Leone</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-number" data-count="500">0</div>
+                    <div class="stat-label">Farmers Listed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" data-count="50">0</div>
+                    <div class="stat-label">Crop Varieties</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" data-count="4">0</div>
+                    <div class="stat-label">Regions Covered</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" data-count="1200">0</div>
+                    <div class="stat-label">Monthly Listings</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Services Section -->
+        <div class="ls-divider"></div>
+        <section id="services" class="ls-section reveal">
+            <div style="text-align: center; max-width: 600px; margin: 0 auto 0.5rem;">
+                <div class="ls-label" style="justify-content: center;">Our Services</div>
+                <h2 class="ls-title" style="text-align: center;">Everything You Need for a Better Market</h2>
+                <p class="ls-subtitle" style="margin: 0 auto;">Tools and services designed specifically for Sierra Leone's agricultural ecosystem.</p>
+            </div>
+
+            <div class="services-grid">
+                <div class="service-card">
+                    <div class="service-icon service-icon-green"><i class="fa-solid fa-tags"></i></div>
+                    <h3>Live Crop Pricing</h3>
+                    <p>Access real-time market prices for rice, cocoa, cassava, and more across all major regions in Sierra Leone.</p>
+                    <div class="service-tags">
+                        <span class="service-tag">Real-time</span>
+                        <span class="service-tag">Regional</span>
+                        <span class="service-tag">Verified</span>
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon service-icon-blue"><i class="fa-solid fa-phone"></i></div>
+                    <h3>Direct Farmer Contact</h3>
+                    <p>Connect directly with farmers and buyers — no middlemen, no hidden fees. Build trusted business relationships.</p>
+                    <div class="service-tags">
+                        <span class="service-tag">No middlemen</span>
+                        <span class="service-tag">Verified contacts</span>
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon service-icon-earth"><i class="fa-solid fa-map-location-dot"></i></div>
+                    <h3>Regional Market Data</h3>
+                    <p>Explore market trends, supply levels, and pricing history across Bo, Kenema, Makeni, and Western Area.</p>
+                    <div class="service-tags">
+                        <span class="service-tag">4 regions</span>
+                        <span class="service-tag">Trends</span>
+                        <span class="service-tag">Analytics</span>
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon service-icon-green"><i class="fa-solid fa-shield-halved"></i></div>
+                    <h3>Secure Transactions</h3>
+                    <p>Verified listings and trusted seller badges ensure that every transaction is safe and transparent.</p>
+                    <div class="service-tags">
+                        <span class="service-tag">Verified</span>
+                        <span class="service-tag">Trusted</span>
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon service-icon-blue"><i class="fa-solid fa-bell"></i></div>
+                    <h3>Price Alerts</h3>
+                    <p>Set price thresholds and get notified when your target crops hit the right price in your preferred region.</p>
+                    <div class="service-tags">
+                        <span class="service-tag">Notifications</span>
+                        <span class="service-tag">Custom</span>
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon service-icon-earth"><i class="fa-solid fa-chart-line"></i></div>
+                    <h3>Market Insights</h3>
+                    <p>Weekly reports on crop performance, seasonal trends, and demand forecasts to help you plan ahead.</p>
+                    <div class="service-tags">
+                        <span class="service-tag">Reports</span>
+                        <span class="service-tag">Weekly</span>
+                        <span class="service-tag">Forecasts</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <div class="ls-divider"></div>
+        <div class="ls-section-alt">
+            <section id="how-it-works" class="ls-section reveal">
+                <div style="text-align: center; max-width: 600px; margin: 0 auto 0.5rem;">
+                    <div class="ls-label" style="justify-content: center;">How It Works</div>
+                    <h2 class="ls-title" style="text-align: center;">Simple Steps to Get Started</h2>
+                    <p class="ls-subtitle" style="margin: 0 auto;">From sign-up to your first market deal — it only takes a few minutes.</p>
+                </div>
+
+                <div class="steps-grid">
+                    <div class="step-card">
+                        <div class="step-number">1</div>
+                        <h3>Create Account</h3>
+                        <p>Sign up with your email and password. It's free and takes less than a minute.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">2</div>
+                        <h3>Browse Listings</h3>
+                        <p>Search crops by name, filter by region, and compare real-time prices at a glance.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">3</div>
+                        <h3>Connect Directly</h3>
+                        <p>Get verified phone numbers and contact details of farmers and traders instantly.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">4</div>
+                        <h3>Trade Smart</h3>
+                        <p>Close deals with confidence using transparent pricing and trusted seller information.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Crops Showcase Section -->
+        <div class="ls-divider"></div>
+        <section id="crops" class="ls-section reveal">
+            <div style="text-align: center; max-width: 600px; margin: 0 auto 0.5rem;">
+                <div class="ls-label" style="justify-content: center;">Popular Crops</div>
+                <h2 class="ls-title" style="text-align: center;">What's on the Market</h2>
+                <p class="ls-subtitle" style="margin: 0 auto;">Explore the most traded crops across Sierra Leone's agricultural regions.</p>
+            </div>
+
+            <div class="crops-grid">
+                <div class="crop-showcase">
+                    <img src="https://picsum.photos/seed/rice-paddy/400/400.jpg" alt="Rice">
+                    <div class="crop-showcase-overlay">
+                        <h4>Rice</h4>
+                        <span>Staple crop · All regions</span>
+                    </div>
+                </div>
+                <div class="crop-showcase">
+                    <img src="https://picsum.photos/seed/cocoa-pods/400/400.jpg" alt="Cocoa">
+                    <div class="crop-showcase-overlay">
+                        <h4>Cocoa</h4>
+                        <span>Export grade · Kenema, Bo</span>
+                    </div>
+                </div>
+                <div class="crop-showcase">
+                    <img src="https://picsum.photos/seed/cassava-root/400/400.jpg" alt="Cassava">
+                    <div class="crop-showcase-overlay">
+                        <h4>Cassava</h4>
+                        <span>High demand · Makeni, Bo</span>
+                    </div>
+                </div>
+                <div class="crop-showcase">
+                    <img src="https://picsum.photos/seed/palm-oil-fruit/400/400.jpg" alt="Palm Oil">
+                    <div class="crop-showcase-overlay">
+                        <h4>Palm Oil</h4>
+                        <span>Premium · Western Area</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Testimonials Section -->
+        <div class="ls-divider"></div>
+        <div class="ls-section-alt">
+            <section id="testimonials" class="ls-section reveal">
+                <div style="text-align: center; max-width: 600px; margin: 0 auto 0.5rem;">
+                    <div class="ls-label" style="justify-content: center;">Testimonials</div>
+                    <h2 class="ls-title" style="text-align: center;">Trusted by Farmers & Buyers</h2>
+                    <p class="ls-subtitle" style="margin: 0 auto;">Hear from the people who use AgriMarket SL every day.</p>
+                </div>
+
+                <div class="testimonials-grid">
+                    <div class="testimonial-card">
+                        <div class="testimonial-stars">
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                        </div>
+                        <blockquote>"AgriMarket SL helped me find buyers for my rice harvest without any middlemen. I got a much better price this season!"</blockquote>
+                        <div class="testimonial-author">
+                            <img src="https://picsum.photos/seed/farmer-mohamed/48/48.jpg" alt="Mohamed S." class="testimonial-avatar">
+                            <div>
+                                <div class="testimonial-name">Mohamed Sesay</div>
+                                <div class="testimonial-role">Rice Farmer · Bo</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="testimonial-card">
+                        <div class="testimonial-stars">
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                        </div>
+                        <blockquote>"I can check live prices before heading to the market. It saves me time and ensures I never overpay for produce."</blockquote>
+                        <div class="testimonial-author">
+                            <img src="https://picsum.photos/seed/trader-fatmata/48/48.jpg" alt="Fatmata K." class="testimonial-avatar">
+                            <div>
+                                <div class="testimonial-name">Fatmata Kamara</div>
+                                <div class="testimonial-role">Market Trader · Freetown</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="testimonial-card">
+                        <div class="testimonial-stars">
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star-half-stroke"></i>
+                        </div>
+                        <blockquote>"The regional filter is a game changer. I track cocoa prices across Kenema and Bo and know exactly where to buy."</blockquote>
+                        <div class="testimonial-author">
+                            <img src="https://picsum.photos/seed/buyer-abdul/48/48.jpg" alt="Abdul R." class="testimonial-avatar">
+                            <div>
+                                <div class="testimonial-name">Abdul Rahman</div>
+                                <div class="testimonial-role">Export Buyer · Kenema</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- CTA Section -->
+        <div class="ls-divider"></div>
+        <section id="cta-section" class="ls-section reveal">
+            <div class="cta-box">
+                <h2>Ready to Access Live Market Prices?</h2>
+                <p>Join hundreds of farmers and buyers already trading smarter on AgriMarket SL.</p>
+                <button class="cta-btn" onclick="document.getElementById('authModal').style.display='flex';">
+                    Get Started Free <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </section>
+
+    </div>
+    <!-- END LANDING SECTIONS -->
 
     <div id="dashboardApp" style="display: none;">
         <div class="dashboard-header float-in" style="animation-delay: 0.1s;">
@@ -138,6 +945,104 @@
     </footer>
 
     <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+
+    <!-- Landing page interactivity -->
+    <script>
+        // Mobile menu toggle
+        const mobileToggle = document.getElementById('mobileToggle');
+        const mobileMenu = document.getElementById('mobileMenu');
+        const mobileIcon = document.getElementById('mobileIcon');
+        let menuOpen = false;
+
+        mobileToggle.addEventListener('click', () => {
+            menuOpen = !menuOpen;
+            mobileMenu.classList.toggle('open', menuOpen);
+            mobileIcon.className = menuOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-bars';
+        });
+
+        // Close mobile menu on link click
+        mobileMenu.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                menuOpen = false;
+                mobileMenu.classList.remove('open');
+                mobileIcon.className = 'fa-solid fa-bars';
+            });
+        });
+
+        // Show landing sections when landing is visible
+        function syncLandingSections() {
+            const landing = document.getElementById('landingPage');
+            const sections = document.getElementById('landingSections');
+            const landingNav = document.getElementById('landingNav');
+            if (landing && landing.style.display !== 'none') {
+                sections.style.display = 'block';
+                landingNav.style.display = '';
+            } else {
+                sections.style.display = 'none';
+                landingNav.style.display = 'none';
+            }
+        }
+
+        // Run on load and observe changes
+        syncLandingSections();
+        const landingObserver = new MutationObserver(syncLandingSections);
+        landingObserver.observe(document.getElementById('landingPage'), { attributes: true, attributeFilter: ['style'] });
+
+        // Scroll reveal
+        const revealEls = document.querySelectorAll('.reveal');
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.12 });
+        revealEls.forEach(el => revealObserver.observe(el));
+
+        // Active nav link on scroll
+        const landingLinks = document.querySelectorAll('#landingNav a, #mobileMenu a');
+        const landingSections = document.querySelectorAll('.landing-sections section[id], #landingPage');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            landingSections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (pageYOffset >= top) {
+                    current = sec.getAttribute('id') || '';
+                }
+            });
+            landingLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+        // Counter animation
+        const statEls = document.querySelectorAll('.stat-number[data-count]');
+        const counterObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const target = parseInt(entry.target.getAttribute('data-count'));
+                    let current = 0;
+                    const increment = target / 50;
+                    const timer = setInterval(() => {
+                        current += increment;
+                        if (current >= target) {
+                            entry.target.textContent = target.toLocaleString() + '+';
+                            clearInterval(timer);
+                        } else {
+                            entry.target.textContent = Math.floor(current).toLocaleString() + '+';
+                        }
+                    }, 30);
+                    counterObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+        statEls.forEach(el => counterObserver.observe(el));
+    </script>
+
     <script src="app.js"></script>
 
 <script type="module">
@@ -146,11 +1051,7 @@
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
-  // TODO: Add SDKs for other Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
 
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
   const firebaseConfig = {
     apiKey: "AIzaSyB4mHBxFdDDhIZCcFcpBqQXdBc2NgkMwxw",
     authDomain: "agrimarket-sl.firebaseapp.com",
@@ -161,13 +1062,11 @@
     measurementId: "G-9VVH5QX71T"
   };
 
-  // Initialize Firebase
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // Expose commonly used functions to the non-module app.js script
   window.firebaseAuth = auth;
   window.firebaseDb = db;
   window.authFns = {
@@ -179,18 +1078,17 @@
   };
   window.dbFns = {
     collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  doc,
-  setDoc,
-  getDoc
+    getDocs,
+    query,
+    where,
+    orderBy,
+    limit,
+    startAfter,
+    doc,
+    setDoc,
+    getDoc
   };
 
-  // Optional quick console helper
   window.testFirestore = async function () {
     try {
       const snap = await getDocs(collection(db, 'crops'));
@@ -200,6 +1098,6 @@
     }
   };
 </script>
-    
+
 </body>
 </html>
