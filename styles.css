@@ -207,3 +207,36 @@ button { font-family: 'Inter', sans-serif; }
     .grid { grid-template-columns: 1fr; }
     .toast-container { right: 10px; left: 10px; bottom: 10px; }
 }
+
+.info-section {
+  padding: 80px 20px;
+  text-align: center;
+  background: #f9f9f9;
+}
+
+.info-section.alt {
+  background: #ffffff;
+}
+
+.info-section h2 {
+  margin-bottom: 20px;
+  font-size: 28px;
+}
+
+.info-section p,
+.info-section li {
+  font-size: 16px;
+  color: #555;
+}
+
+.final-cta {
+  text-align: center;
+  padding: 60px 20px;
+  background: #eaf7ea;
+}
+
+#btnStartLogin,
+#btnStartRegister {
+  pointer-events: none;
+  opacity: 0.5;
+}
