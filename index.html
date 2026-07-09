@@ -508,6 +508,233 @@
             transition: all 0.2s ease;
         }
         .mobile-menu a:hover { background: #f3f4f6; color: var(--agri-green); }
+
+        /* ===== PROFESSIONAL FOOTER STYLES ===== */
+        .site-footer {
+            background: #1a2e1a;
+            color: #c8d6c8;
+            padding: 0;
+            margin-top: 0;
+        }
+        .footer-main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 1.5rem 3rem;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2.5rem;
+        }
+        @media (min-width: 768px) {
+            .footer-main { grid-template-columns: 1.5fr 1fr 1fr 1.2fr; gap: 2rem; }
+        }
+        .footer-brand .footer-logo {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .footer-brand .footer-logo i {
+            color: var(--agri-green-light);
+        }
+        .footer-brand p {
+            font-size: 0.88rem;
+            line-height: 1.7;
+            color: #8fa68f;
+            margin-bottom: 1.25rem;
+        }
+        .footer-social {
+            display: flex;
+            gap: 0.6rem;
+        }
+        .footer-social a {
+            width: 36px;
+            height: 36px;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #8fa68f;
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .footer-social a:hover {
+            border-color: var(--agri-green-light);
+            color: var(--agri-green-light);
+            background: rgba(34,197,94,0.08);
+        }
+        .footer-col h4 {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #fff;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.6rem;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .footer-col ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .footer-col ul li {
+            margin-bottom: 0.65rem;
+        }
+        .footer-col ul li a {
+            font-size: 0.85rem;
+            color: #8fa68f;
+            text-decoration: none;
+            transition: color 0.25s ease, padding-left 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .footer-col ul li a:hover {
+            color: var(--agri-green-light);
+            padding-left: 4px;
+        }
+        .footer-col ul li a i {
+            font-size: 0.7rem;
+            opacity: 0.6;
+        }
+        .footer-contact-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .footer-contact-item i {
+            color: var(--agri-green-light);
+            margin-top: 0.15rem;
+            font-size: 0.85rem;
+            width: 16px;
+            text-align: center;
+        }
+        .footer-contact-item span,
+        .footer-contact-item a {
+            font-size: 0.85rem;
+            color: #8fa68f;
+            text-decoration: none;
+            line-height: 1.5;
+            transition: color 0.25s ease;
+        }
+        .footer-contact-item a:hover {
+            color: var(--agri-green-light);
+        }
+        .footer-bottom {
+            border-top: 1px solid rgba(255,255,255,0.06);
+            padding: 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            align-items: center;
+            text-align: center;
+        }
+        @media (min-width: 768px) {
+            .footer-bottom {
+                flex-direction: row;
+                justify-content: space-between;
+                text-align: left;
+            }
+        }
+        .footer-bottom p {
+            font-size: 0.78rem;
+            color: #6b806b;
+            margin: 0;
+        }
+        .footer-bottom-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+        .footer-bottom-links a {
+            font-size: 0.78rem;
+            color: #6b806b;
+            text-decoration: none;
+            transition: color 0.25s ease;
+        }
+        .footer-bottom-links a:hover {
+            color: var(--agri-green-light);
+        }
+        .footer-powered {
+            font-size: 0.72rem;
+            color: #4d634d;
+        }
+        .footer-powered a {
+            color: #6b806b;
+            text-decoration: none;
+            transition: color 0.25s ease;
+        }
+        .footer-powered a:hover { color: var(--agri-green-light); }
+
+        /* Static page content styling */
+        .static-page h2 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--agri-green);
+            display: inline-block;
+        }
+        .static-page h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #333;
+            margin: 1.5rem 0 0.5rem;
+        }
+        .static-page p {
+            font-size: 0.95rem;
+            color: #555;
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+        .static-page ul {
+            padding-left: 1.25rem;
+            margin-bottom: 1rem;
+        }
+        .static-page ul li {
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.8;
+            margin-bottom: 0.35rem;
+        }
+        .static-page a {
+            color: var(--agri-green);
+            text-decoration: none;
+        }
+        .static-page a:hover { text-decoration: underline; }
+        .static-page .contact-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .static-page .contact-card i {
+            font-size: 1.5rem;
+            color: var(--agri-green);
+        }
+        .static-page .contact-card .label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #999;
+        }
+        .static-page .contact-card .value {
+            font-weight: 600;
+            color: #1a1a1a;
+            font-size: 0.95rem;
+        }
     </style>
 </head>
 <body>
@@ -545,7 +772,6 @@
         <nav id="navMenu" aria-label="Account"></nav>
     </header>
 
-    <!-- Mobile menu overlay handling -->
     <div id="landingPage" class="hero full-screen float-in" style="animation-delay: 0.2s;">
         <div class="hero-content">
             <h1>Connecting Sierra Leone's Farmers to the World</h1>
@@ -582,7 +808,6 @@
                 </div>
             </div>
 
-            <!-- Stats -->
             <div class="stats-row">
                 <div class="stat-card">
                     <div class="stat-number" data-count="500">0</div>
@@ -762,11 +987,7 @@
                 <div class="testimonials-grid">
                     <div class="testimonial-card">
                         <div class="testimonial-stars">
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
                         </div>
                         <blockquote>"AgriMarket SL helped me find buyers for my rice harvest without any middlemen. I got a much better price this season!"</blockquote>
                         <div class="testimonial-author">
@@ -779,11 +1000,7 @@
                     </div>
                     <div class="testimonial-card">
                         <div class="testimonial-stars">
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
                         </div>
                         <blockquote>"I can check live prices before heading to the market. It saves me time and ensures I never overpay for produce."</blockquote>
                         <div class="testimonial-author">
@@ -796,11 +1013,7 @@
                     </div>
                     <div class="testimonial-card">
                         <div class="testimonial-stars">
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star"></i>
-                            <i class="fa-solid fa-star-half-stroke"></i>
+                            <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star-half-stroke"></i>
                         </div>
                         <blockquote>"The regional filter is a game changer. I track cocoa prices across Kenema and Bo and know exactly where to buy."</blockquote>
                         <div class="testimonial-author">
@@ -821,7 +1034,7 @@
             <div class="cta-box">
                 <h2>Ready to Access Live Market Prices?</h2>
                 <p>Join hundreds of farmers and buyers already trading smarter on AgriMarket SL.</p>
-                <button class="cta-btn" onclick="document.getElementById('authModal').style.display='flex';">
+                <button class="cta-btn" onclick="openRegisterModal();">
                     Get Started Free <i class="fa-solid fa-arrow-right"></i>
                 </button>
             </div>
@@ -926,27 +1139,88 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <div id="staticPageContainer" class="container" style="display: none; padding-top: 4rem; min-height: 70vh;">
-        <button class="btn-outline" onclick="showDashboard()">← Back to Dashboard</button>
-        <div id="staticContent" style="margin-top: 2rem;"></div>
+        <button class="btn-outline" id="backFromStatic">← Back</button>
+        <div id="staticContent" class="static-page" style="margin-top: 2rem;"></div>
     </div>
 
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <p>&copy; <span id="year"></span> AgriMarket SL. Empowering farmers across Sierra Leone.</p>
-                <span class="powered-by">Powered by Hassan Conteh</span>
-                <div class="footer-links">
-                    <a href="#" onclick="showPage('privacy'); return false;">Privacy Policy</a>
-                    <a href="#" onclick="showPage('support'); return false;">Support</a>
-                    <a href="#" onclick="showPage('contact'); return false;">Contact Us</a>
+    <!-- ===== PROFESSIONAL FOOTER ===== -->
+    <footer class="site-footer">
+        <div class="footer-main">
+            <!-- Brand Column -->
+            <div class="footer-brand">
+                <div class="footer-logo"><i class="fa-solid fa-leaf"></i> AgriMarket SL</div>
+                <p>Empowering Sierra Leone's farmers with real-time market access, transparent pricing, and direct buyer connections.</p>
+                <div class="footer-social">
+                    <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
+                    <a href="#" aria-label="Twitter"><i class="fa-brands fa-x-twitter"></i></a>
+                    <a href="#" aria-label="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
+                    <a href="mailto:support@agrimarketsl.com" aria-label="Email"><i class="fa-solid fa-envelope"></i></a>
                 </div>
             </div>
+
+            <!-- Quick Links Column -->
+            <div class="footer-col">
+                <h4>Quick Links</h4>
+                <ul>
+                    <li><a href="#hero"><i class="fa-solid fa-chevron-right"></i> Home</a></li>
+                    <li><a href="#about"><i class="fa-solid fa-chevron-right"></i> About Us</a></li>
+                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Services</a></li>
+                    <li><a href="#how-it-works"><i class="fa-solid fa-chevron-right"></i> How It Works</a></li>
+                    <li><a href="#crops"><i class="fa-solid fa-chevron-right"></i> Popular Crops</a></li>
+                    <li><a href="#testimonials"><i class="fa-solid fa-chevron-right"></i> Reviews</a></li>
+                </ul>
+            </div>
+
+            <!-- Services Column -->
+            <div class="footer-col">
+                <h4>Services</h4>
+                <ul>
+                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Live Crop Pricing</a></li>
+                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Direct Farmer Contact</a></li>
+                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Regional Market Data</a></li>
+                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Price Alerts</a></li>
+                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Market Insights</a></li>
+                </ul>
+            </div>
+
+            <!-- Contact Column -->
+            <div class="footer-col">
+                <h4>Contact Us</h4>
+                <div class="footer-contact-item">
+                    <i class="fa-solid fa-envelope"></i>
+                    <a href="mailto:support@agrimarketsl.com">support@agrimarketsl.com</a>
+                </div>
+                <div class="footer-contact-item">
+                    <i class="fa-solid fa-phone"></i>
+                    <a href="tel:+23276000000">+232 76 000 000</a>
+                </div>
+                <div class="footer-contact-item">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <span>Freetown, Western Area<br>Sierra Leone</span>
+                </div>
+                <div class="footer-contact-item">
+                    <i class="fa-solid fa-clock"></i>
+                    <span>Mon – Sat: 8AM – 6PM</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Bottom -->
+        <div class="footer-bottom">
+            <p>&copy; <span id="year"></span> AgriMarket SL. All rights reserved.</p>
+            <div class="footer-bottom-links">
+                <a href="#" onclick="showPage('privacy'); return false;">Privacy Policy</a>
+                <a href="#" onclick="showPage('terms'); return false;">Terms of Service</a>
+                <a href="#" onclick="showPage('support'); return false;">Support</a>
+                <a href="#" onclick="showPage('contact'); return false;">Contact Us</a>
+            </div>
+            <span class="footer-powered">Built by <a href="#">Hassan Conteh</a></span>
         </div>
     </footer>
 
     <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 
-        <!-- Landing page interactivity -->
+    <!-- Landing page interactivity -->
     <script>
         // Mobile menu toggle
         const mobileToggle = document.getElementById('mobileToggle');
@@ -960,7 +1234,6 @@
             mobileIcon.className = menuOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-bars';
         });
 
-        // Close mobile menu on link click
         mobileMenu.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', () => {
                 menuOpen = false;
@@ -983,7 +1256,6 @@
             }
         }
 
-        // Run on load and observe changes
         syncLandingSections();
         const landingObserver = new MutationObserver(syncLandingSections);
         landingObserver.observe(document.getElementById('landingPage'), { attributes: true, attributeFilter: ['style'] });
@@ -992,9 +1264,7 @@
         const revealEls = document.querySelectorAll('.reveal');
         const revealObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('visible');
-                }
+                if (entry.isIntersecting) entry.target.classList.add('visible');
             });
         }, { threshold: 0.12 });
         revealEls.forEach(el => revealObserver.observe(el));
@@ -1007,15 +1277,11 @@
             let current = '';
             landingSections.forEach(sec => {
                 const top = sec.offsetTop - 120;
-                if (pageYOffset >= top) {
-                    current = sec.getAttribute('id') || '';
-                }
+                if (pageYOffset >= top) current = sec.getAttribute('id') || '';
             });
             landingLinks.forEach(link => {
                 link.classList.remove('active');
-                if (link.getAttribute('href') === '#' + current) {
-                    link.classList.add('active');
-                }
+                if (link.getAttribute('href') === '#' + current) link.classList.add('active');
             });
         });
 
@@ -1051,22 +1317,193 @@
             const loginForm = document.getElementById('loginForm');
             const resetForm = document.getElementById('resetForm');
 
-            // Show modal
             modal.style.display = 'flex';
-
-            // Switch to Register tab
             tabRegister.classList.add('active');
             tabLogin.classList.remove('active');
             registerForm.classList.add('active');
             loginForm.classList.remove('active');
             resetForm.classList.remove('active');
         }
+
+        // ===== STATIC PAGE SYSTEM (Working Footer Links) =====
+        // Page content templates
+        const pageContents = {
+            privacy: `
+                <h2>Privacy Policy</h2>
+                <p>Last updated: January 2025</p>
+                <h3>1. Information We Collect</h3>
+                <p>When you create an account on AgriMarket SL, we collect your name, email address, and password. When you browse listings or interact with market data, we may collect usage information such as search queries and pages visited.</p>
+                <h3>2. How We Use Your Information</h3>
+                <ul>
+                    <li>To provide and maintain our market platform services</li>
+                    <li>To send you price alerts and market updates you've opted into</li>
+                    <li>To verify your identity and prevent fraud</li>
+                    <li>To improve our platform and user experience</li>
+                </ul>
+                <h3>3. Information Sharing</h3>
+                <p>We do not sell your personal information. We share farmer contact details only with verified buyers within the platform. Aggregate, anonymized market data may be shared for research purposes.</p>
+                <h3>4. Data Security</h3>
+                <p>We use industry-standard encryption and Firebase security rules to protect your data. Passwords are encrypted and never stored in plain text.</p>
+                <h3>5. Your Rights</h3>
+                <p>You can request to view, update, or delete your personal data at any time by contacting us at support@agrimarketsl.com.</p>
+            `,
+            terms: `
+                <h2>Terms of Service</h2>
+                <p>Last updated: January 2025</p>
+                <h3>1. Acceptance of Terms</h3>
+                <p>By creating an account and using AgriMarket SL, you agree to these terms. If you disagree with any part, you may not access the platform.</p>
+                <h3>2. User Accounts</h3>
+                <p>You are responsible for maintaining the confidentiality of your account credentials. You must provide accurate information and may not create multiple accounts or impersonate others.</p>
+                <h3>3. Market Listings</h3>
+                <p>All crop listings must contain accurate pricing, location, and contact information. Fake or misleading listings will be removed and may result in account suspension.</p>
+                <h3>4. Transactions</h3>
+                <p>AgriMarket SL facilitates connections between farmers and buyers. We are not a party to any transaction and are not liable for disputes between users. Users transact at their own risk.</p>
+                <h3>5. Acceptable Use</h3>
+                <ul>
+                    <li>Do not use the platform for illegal activities</li>
+                    <li>Do not attempt to hack, scrape, or disrupt the service</li>
+                    <li>Do not post offensive, misleading, or spam content</li>
+                    <li>Do not harass or threaten other users</li>
+                </ul>
+                <h3>6. Termination</h3>
+                <p>We may suspend or terminate accounts that violate these terms without prior notice. You may delete your account at any time by contacting support.</p>
+            `,
+            support: `
+                <h2>Support Center</h2>
+                <p>Need help with AgriMarket SL? Here are the quickest ways to get assistance.</p>
+                <h3>Frequently Asked Questions</h3>
+                <p><strong>Q: How do I create an account?</strong><br>A: Click "Get Started Free" on the homepage, fill in your name, email, and password, then click "Create Account."</p>
+                <p><strong>Q: How do I search for crops?</strong><br>A: Once signed in, use the search bar at the top of the dashboard. Type a crop name and optionally filter by region.</p>
+                <p><strong>Q: How do I contact a farmer?</strong><br>A: On any crop listing card, click the contact button to view the farmer's phone number and email.</p>
+                <p><strong>Q: I forgot my password. What do I do?</strong><br>A: Click "Forgot?" on the sign-in form, enter your email, and we'll send a password reset link.</p>
+                <p><strong>Q: Are the prices accurate?</strong><br>A: Prices are updated regularly by verified farmers and traders. We mark each listing with its last-updated timestamp.</p>
+                <h3>Still Need Help?</h3>
+                <div class="contact-card">
+                    <i class="fa-solid fa-envelope"></i>
+                    <div><div class="label">Email Support</div><div class="value"><a href="mailto:support@agrimarketsl.com">support@agrimarketsl.com</a></div></div>
+                </div>
+                <div class="contact-card">
+                    <i class="fa-brands fa-whatsapp"></i>
+                    <div><div class="label">WhatsApp</div><div class="value"><a href="https://wa.me/23276000000">+232 76 000 000</a></div></div>
+                </div>
+                <div class="contact-card">
+                    <i class="fa-solid fa-clock"></i>
+                    <div><div class="label">Response Time</div><div class="value">Within 24 hours</div></div>
+                </div>
+            `,
+            contact: `
+                <h2>Contact Us</h2>
+                <p>We'd love to hear from you. Whether you have a question, suggestion, or partnership proposal — reach out anytime.</p>
+                <h3>Get in Touch</h3>
+                <div class="contact-card">
+                    <i class="fa-solid fa-envelope"></i>
+                    <div><div class="label">Email</div><div class="value"><a href="mailto:support@agrimarketsl.com">support@agrimarketsl.com</a></div></div>
+                </div>
+                <div class="contact-card">
+                    <i class="fa-solid fa-phone"></i>
+                    <div><div class="label">Phone</div><div class="value"><a href="tel:+23276000000">+232 76 000 000</a></div></div>
+                </div>
+                <div class="contact-card">
+                    <i class="fa-brands fa-whatsapp"></i>
+                    <div><div class="label">WhatsApp</div><div class="value"><a href="https://wa.me/23276000000">Chat on WhatsApp</a></div></div>
+                </div>
+                <div class="contact-card">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <div><div class="label">Office</div><div class="value">Freetown, Western Area, Sierra Leone</div></div>
+                </div>
+                <h3>Business Hours</h3>
+                <p>Monday – Saturday: 8:00 AM – 6:00 PM (GMT)</p>
+                <p>Sunday: Closed</p>
+                <h3>Partnerships</h3>
+                <p>Interested in partnering with AgriMarket SL to expand market access in your region? Email us at <a href="mailto:partnerships@agrimarketsl.com">partnerships@agrimarketsl.com</a></p>
+            `
+        };
+
+        // Override or define showPage so footer links always work
+        // (If app.js defines it later, that's fine — this is a safe fallback)
+        window.showPage = function(page) {
+            const container = document.getElementById('staticPageContainer');
+            const content = document.getElementById('staticContent');
+
+            if (pageContents[page]) {
+                content.innerHTML = pageContents[page];
+            } else {
+                content.innerHTML = '<h2>Page Not Found</h2><p>The requested page could not be found. <a href="#" onclick="goBackFromStatic(); return false;">Go back</a></p>';
+            }
+
+            // Hide landing and dashboard
+            document.getElementById('landingPage').style.display = 'none';
+            document.getElementById('landingSections').style.display = 'none';
+            document.getElementById('dashboardApp').style.display = 'none';
+
+            // Show static page
+            container.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        // Smart "Back" button — returns to landing or dashboard depending on auth state
+        function goBackFromStatic() {
+            const container = document.getElementById('staticPageContainer');
+            container.style.display = 'none';
+
+            // Check if user is authenticated by seeing if dashboard is populated
+            const dashboard = document.getElementById('dashboardApp');
+            const landing = document.getElementById('landingPage');
+
+            // If dashboard has content visible state (set by app.js auth), return there
+            // Otherwise return to landing
+            if (dashboard.style.display !== 'none') {
+                // Dashboard was active — return to it
+                dashboard.style.display = 'block';
+            } else {
+                // Return to landing page
+                landing.style.display = '';
+                document.getElementById('landingSections').style.display = 'block';
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Wire up the back button
+        document.getElementById('backFromStatic').addEventListener('click', goBackFromStatic);
+
+        // Also make footer Quick Links scroll to sections when on landing,
+        // or navigate properly when on dashboard or static page
+        document.querySelectorAll('.site-footer .footer-col a[href^="#"]').forEach(link => {
+            link.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                const targetId = href.substring(1);
+                const targetEl = document.getElementById(targetId);
+
+                if (targetEl) {
+                    // If static page is open, close it first
+                    const staticContainer = document.getElementById('staticPageContainer');
+                    if (staticContainer.style.display !== 'none') {
+                        staticContainer.style.display = 'none';
+                        document.getElementById('landingPage').style.display = '';
+                        document.getElementById('landingSections').style.display = 'block';
+                    }
+
+                    // If dashboard is open, we can still scroll but the sections won't be visible
+                    // So switch back to landing
+                    const dashboard = document.getElementById('dashboardApp');
+                    if (dashboard.style.display !== 'none') {
+                        // User is logged in — just scroll within dashboard context
+                        // (landing sections are hidden, so let it be)
+                        return;
+                    }
+
+                    // Small delay to let display changes render
+                    setTimeout(() => {
+                        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                }
+            });
+        });
     </script>
 
     <script src="app.js"></script>
 
 <script type="module">
-  // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
