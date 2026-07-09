@@ -11,8 +11,7 @@
     --navbar-height: 70px;
 }
 
-/* Improved: Removed font-family from * to improve performance */
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
 
 body {
     display: flex;
@@ -20,7 +19,6 @@ body {
     min-height: 100vh;
     background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
     background-attachment: fixed;
-    font-family: 'Inter', sans-serif; /* Applied here instead */
 }
 
 #dashboardApp, #landingPage { flex: 1; }
@@ -33,30 +31,9 @@ body {
 
 @keyframes floatUp { to { opacity: 1; transform: translateY(0); } }
 
-/* Added: Missing loader styles referenced in JS */
-.loader {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 3rem;
-    grid-column: 1 / -1;
-}
-.loader::after {
-    content: '';
-    width: 40px;
-    height: 40px;
-    border: 4px solid var(--border);
-    border-top-color: var(--sl-blue);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
 @media (prefers-reduced-motion: reduce) {
     .float-in { animation: none; opacity: 1; transform: none; }
     .card { transition: none; }
-    .modal-content { transition: none; }
-    .loader::after { animation: none; }
 }
 
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
@@ -83,14 +60,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .nav-link { color: var(--text-muted); text-decoration: none; margin: 0 1.5rem; font-weight: 600; transition: color 0.2s; }
 .nav-link:hover { color: var(--sl-blue); }
 
-button { font-family: inherit; } /* Changed to inherit */
-
-/* Improved: Explicit transitions save browser processing power */
-.btn-blue { background-color: var(--sl-blue); color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
+button { font-family: 'Inter', sans-serif; }
+.btn-blue { background-color: var(--sl-blue); color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; }
 .btn-blue:hover { background-color: var(--sl-blue-dark); }
-.btn-green { background-color: var(--sl-green); color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
+.btn-green { background-color: var(--sl-green); color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; }
 .btn-green:hover { background-color: var(--sl-green-dark); }
-.btn-outline { background: transparent; border: 2px solid var(--sl-blue); color: var(--sl-blue); padding: 0.5rem 1.2rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background-color 0.2s, color 0.2s, border-color 0.2s; }
+.btn-outline { background: transparent; border: 2px solid var(--sl-blue); color: var(--sl-blue); padding: 0.5rem 1.2rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; }
 .btn-outline:hover { background: var(--sl-blue); color: white; }
 .btn-large { font-size: 1.1rem; padding: 1rem 2rem; }
 .btn-full { width: 100%; margin-top: 1rem; padding: 1rem; }
@@ -145,7 +120,6 @@ button { font-family: inherit; } /* Changed to inherit */
     background: transparent;
     outline: none;
     color: var(--text-main);
-    font-family: inherit;
 }
 
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.5rem; padding-top: 2rem; }
@@ -153,7 +127,7 @@ button { font-family: inherit; } /* Changed to inherit */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2rem; padding-bottom: 3rem; }
 
 .card {
-    background: rgba(255, 255, 255, 0.6); /* Slightly increased opacity for better text readability */
+    background: rgba(255, 255, 255, 0.5);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.4);
@@ -161,11 +135,10 @@ button { font-family: inherit; } /* Changed to inherit */
     overflow: hidden;
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
     transition: transform 0.3s ease, background 0.3s ease;
-    will-change: transform; /* Helps browser optimize hover animations */
 }
 
 .card:hover {
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.7);
     transform: translateY(-5px);
 }
 
@@ -180,47 +153,29 @@ button { font-family: inherit; } /* Changed to inherit */
 .card-meta { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-muted); }
 .card-meta p { display: flex; align-items: center; gap: 5px; }
 .card-meta a { color: var(--sl-blue); text-decoration: none; font-weight: 600; }
-.btn-contact { width: 100%; padding: 0.8rem; background-color: white; color: var(--sl-blue); border: 1px solid var(--sl-blue); border-radius: 6px; font-weight: 600; cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+.btn-contact { width: 100%; padding: 0.8rem; background-color: white; color: var(--sl-blue); border: 1px solid var(--sl-blue); border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; }
 .btn-contact:hover { background-color: var(--sl-blue); color: white; }
 
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: 0.3s ease; padding: 1rem; }
 .modal-overlay.active { opacity: 1; visibility: visible; }
-
-/* Improved: Added smooth modal entrance animation */
-.modal-content { 
-    background: var(--bg-card); 
-    width: 90%; 
-    max-width: 450px; 
-    max-height: 90vh; 
-    overflow-y: auto; 
-    border-radius: 16px; 
-    padding: 2.5rem; 
-    position: relative; 
-    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); 
-    transform: scale(0.95) translateY(10px);
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.modal-overlay.active .modal-content {
-    transform: scale(1) translateY(0);
-}
-
+.modal-content { background: var(--bg-card); width: 90%; max-width: 450px; max-height: 90vh; overflow-y: auto; border-radius: 16px; padding: 2.5rem; position: relative; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
 .close-btn { position: absolute; top: 1rem; right: 1.5rem; background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; }
 .auth-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; }
-.tab-btn { flex: 1; background: none; border: none; padding: 1rem; font-weight: 600; color: var(--text-muted); cursor: pointer; position: relative; font-family: inherit; }
+.tab-btn { flex: 1; background: none; border: none; padding: 1rem; font-weight: 600; color: var(--text-muted); cursor: pointer; position: relative; }
 .tab-btn.active { color: var(--sl-blue); }
 .tab-btn.active::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 100%; height: 2px; background: var(--sl-blue); }
 .auth-form { display: none; }
 .auth-form.active { display: block; animation: floatUp 0.3s ease forwards; }
 .form-group { margin-bottom: 1.2rem; }
 .form-group label { display: block; font-size: 0.9rem; margin-bottom: 0.4rem; font-weight: 600; }
-.form-group input { width: 100%; padding: 0.8rem; border: 1px solid var(--border); border-radius: 6px; outline: none; transition: border-color 0.2s; font-family: inherit; }
+.form-group input { width: 100%; padding: 0.8rem; border: 1px solid var(--border); border-radius: 6px; outline: none; transition: 0.2s; }
 .form-group input:focus { border-color: var(--sl-blue); }
 
 .auth-link { color: var(--sl-blue); text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: color 0.2s; }
 .auth-link:hover { color: var(--sl-blue-dark); text-decoration: underline; }
 
 .toast-container { position: fixed; bottom: 20px; right: 20px; left: 20px; z-index: 1100; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
-.toast { background: var(--text-main); color: white; padding: 1rem 1.5rem; border-radius: 8px; margin-top: 10px; animation: floatUp 0.3s ease forwards; max-width: 360px; pointer-events: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.toast { background: var(--text-main); color: white; padding: 1rem 1.5rem; border-radius: 8px; margin-top: 10px; animation: floatUp 0.3s ease forwards; max-width: 360px; pointer-events: auto; }
 
 .footer { background-color: #ffffff; border-top: 1px solid var(--border); padding: 2rem 0; margin-top: 4rem; color: var(--text-muted); font-size: 0.9rem; }
 .footer-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
