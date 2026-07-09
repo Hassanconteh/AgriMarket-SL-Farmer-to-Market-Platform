@@ -63,6 +63,65 @@ function switchTab(tab) {
     }
 }
 
+function scrollToSection(id) {
+    const target = document.getElementById(id);
+    if (!target) return;
+    const navHeight = document.querySelector('.navbar').offsetHeight;
+    const top = target.getBoundingClientRect().top + window.pageYOffset - navHeight;
+    window.scrollTo({ top, behavior: 'smooth' });
+}
+window.scrollToSection = scrollToSection;
+
+const STATIC_PAGES = {
+    privacy: {
+        title: 'Privacy Policy',
+        html: `
+            <h2>Privacy Policy</h2>
+            <p>AgriMarket SL collects the information you provide when creating an account (name, email) and when posting a listing (crop details, price, phone number), in order to operate the marketplace.</p>
+            <h3>How we use your data</h3>
+            <p>Listing details, including your phone number, are shown publicly to signed-in buyers so they can contact you directly. Account information is used only to operate and secure your account.</p>
+            <h3>Your choices</h3>
+            <p>You can update or remove your listings at any time, and you can request account deletion by contacting support.</p>
+        `
+    },
+    support: {
+        title: 'Support',
+        html: `
+            <h2>Support</h2>
+            <p>Need help with your account or a listing? Here are the most common questions.</p>
+            <h3>I can't sign in</h3>
+            <p>Use the "Forgot?" link on the sign-in form to reset your password. If issues continue, reach out through the contact section below.</p>
+            <h3>How do I list a crop?</h3>
+            <p>Sign in, then use the dashboard to add your crop, price, and location so buyers can find and call you.</p>
+            <h3>Still stuck?</h3>
+            <p>Message us using the contact form on the homepage, or email support@agrimarketsl.com.</p>
+        `
+    }
+};
+
+function showPage(pageKey) {
+    const page = STATIC_PAGES[pageKey];
+    if (!page) return;
+    document.getElementById('landingPage').style.display = 'none';
+    dashboardApp.style.display = 'none';
+    document.getElementById('staticPageContainer').style.display = 'block';
+    document.getElementById('staticContent').innerHTML = page.html;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.showPage = showPage;
+
+function showDashboard() {
+    document.getElementById('staticPageContainer').style.display = 'none';
+    const auth = window.firebaseAuth;
+    if (auth && auth.currentUser) {
+        dashboardApp.style.display = 'block';
+    } else {
+        document.getElementById('landingPage').style.display = 'block';
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.showDashboard = showDashboard;
+
 function hideAuthTabs() {
     document.getElementById('authTabsContainer').style.display = 'none';
 }
@@ -344,7 +403,7 @@ async function initApp() {
             await loadInitialCrops();
         } else {
             // No user
-            landingPage.style.display = 'flex';
+            landingPage.style.display = 'block';
             dashboardApp.style.display = 'none';
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
             document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
@@ -416,16 +475,61 @@ async function initApp() {
     });
 
     // UI interactions
-    document.getElementById('searchBtn').addEventListener('click', applyFilters);
-    document.getElementById('searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
-    document.getElementById('closeModal').addEventListener('click', closeModal);
-    authModal.addEventListener('click', (e) => { if (e.target === authModal) closeModal(); });
-    document.getElementById('tabLogin').addEventListener('click', () => { showAuthTabs(); switchTab('login'); });
-    document.getElementById('tabRegister').addEventListener('click', () => { showAuthTabs(); switchTab('register'); });
-    document.getElementById('forgotPasswordLink').addEventListener('click', (e) => { e.preventDefault(); hideAuthTabs(); switchTab('reset'); });
-    document.getElementById('backToLoginLink').addEventListener('click', (e) => { e.preventDefault(); showAuthTabs(); switchTab('login'); });
-    document.getElementById('btnStartLogin').addEventListener('click', () => openModal('login'));
-    document.getElementById('btnStartRegister').addEventListener('click', () => openModal('register'));
+    document.getElementById('searchBtn')?.addEventListener('click', applyFilters);
+    document.getElementById('searchInput')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
+    document.getElementById('closeModal')?.addEventListener('click', closeModal);
+    authModal?.addEventListener('click', (e) => { if (e.target === authModal) closeModal(); });
+    document.getElementById('tabLogin')?.addEventListener('click', () => { showAuthTabs(); switchTab('login'); });
+    document.getElementById('tabRegister')?.addEventListener('click', () => { showAuthTabs(); switchTab('register'); });
+    document.getElementById('forgotPasswordLink')?.addEventListener('click', (e) => { e.preventDefault(); hideAuthTabs(); switchTab('reset'); });
+    document.getElementById('backToLoginLink')?.addEventListener('click', (e) => { e.preventDefault(); showAuthTabs(); switchTab('login'); });
+    document.getElementById('btnStartLogin')?.addEventListener('click', () => openModal('login'));
+    document.getElementById('btnStartRegister')?.addEventListener('click', () => openModal('register'));
+
+    const ctaLoginBtn = document.getElementById('btnCtaLogin');
+    const ctaRegisterBtn = document.getElementById('btnCtaRegister');
+    if (ctaLoginBtn) ctaLoginBtn.addEventListener('click', () => openModal('login'));
+    if (ctaRegisterBtn) ctaRegisterBtn.addEventListener('click', () => openModal('register'));
+
+    // Mobile nav toggle
+    const navToggle = document.getElementById('navToggle');
+    const navLinksEl = document.getElementById('navLinks');
+    if (navToggle && navLinksEl) {
+        navToggle.addEventListener('click', () => {
+            const isOpen = navLinksEl.classList.toggle('open');
+            navToggle.setAttribute('aria-expanded', String(isOpen));
+        });
+    }
+
+    // Smooth-scroll in-page nav links (Home/About/Services/How It Works/Contact)
+    document.querySelectorAll('.nav-page-link').forEach((link) => {
+        link.addEventListener('click', (e) => {
+            const href = link.getAttribute('href') || '';
+            if (href.startsWith('#')) {
+                e.preventDefault();
+                const targetId = href.slice(1);
+                // If a static page is currently showing, return to the dashboard/landing first
+                if (document.getElementById('staticPageContainer').style.display !== 'none') {
+                    showDashboard();
+                }
+                scrollToSection(targetId);
+            }
+            if (navLinksEl && navLinksEl.classList.contains('open')) {
+                navLinksEl.classList.remove('open');
+                navToggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+    });
+
+    // Contact form (client-side only — no backend endpoint configured)
+    const contactForm = document.getElementById('contactForm');
+    if (contactForm) {
+        contactForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            triggerToast('Thanks for reaching out! We will get back to you soon.');
+            contactForm.reset();
+        });
+    }
 
     // Load initial UI state: we rely on onAuthStateChanged to set the proper view
 }
