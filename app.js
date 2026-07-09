@@ -15,15 +15,18 @@ const resultCountEl = document.getElementById('resultCount');
 
 // Pagination & query state
 let pageSize = 8;
-let lastVisible = null; 
+let lastVisible = null; // last document snapshot for pagination
 let isLoading = false;
 let currentQueryOptions = { searchTerm: '', location: 'All' };
 
-// SECURITY FIX: Sanitize strings to prevent XSS attacks when injecting into innerHTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = String(text || '');
-    return div.innerHTML;
+// Escapes HTML-significant characters so untrusted data (crop listings can be
+// created by any signed-in user) can never inject markup/scripts when we
+// build card HTML with template strings below. Always run user-supplied or
+// database-supplied text through this before interpolating into innerHTML.
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
 }
 
 function triggerToast(message) {
@@ -79,55 +82,14 @@ function scrollToSection(id) {
 }
 window.scrollToSection = scrollToSection;
 
-const STATIC_PAGES = {
-    privacy: {
-        title: 'Privacy Policy',
-        html: `
-            <h2>Privacy Policy</h2>
-            <p>AgriMarket SL collects the information you provide when creating an account (name, email) and when posting a listing (crop details, price, phone number), in order to operate the marketplace.</p>
-            <h3>How we use your data</h3>
-            <p>Listing details, including your phone number, are shown publicly to signed-in buyers so they can contact you directly. Account information is used only to operate and secure your account.</p>
-            <h3>Your choices</h3>
-            <p>You can update or remove your listings at any time, and you can request account deletion by contacting support.</p>
-        `
-    },
-    support: {
-        title: 'Support',
-        html: `
-            <h2>Support</h2>
-            <p>Need help with your account or a listing? Here are the most common questions.</p>
-            <h3>I can't sign in</h3>
-            <p>Use the "Forgot?" link on the sign-in form to reset your password. If issues continue, reach out through the contact section below.</p>
-            <h3>How do I list a crop?</h3>
-            <p>Sign in, then use the dashboard to add your crop, price, and location so buyers can find and call you.</p>
-            <h3>Still stuck?</h3>
-            <p>Message us using the contact form on the homepage, or email support@agrimarketsl.com.</p>
-        `
-    }
-};
-
-function showPage(pageKey) {
-    const page = STATIC_PAGES[pageKey];
-    if (!page) return;
-    document.getElementById('landingPage').style.display = 'none';
-    dashboardApp.style.display = 'none';
-    document.getElementById('staticPageContainer').style.display = 'block';
-    document.getElementById('staticContent').innerHTML = page.html;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-window.showPage = showPage;
-
-function showDashboard() {
-    document.getElementById('staticPageContainer').style.display = 'none';
-    const auth = window.firebaseAuth;
-    if (auth && auth.currentUser) {
-        dashboardApp.style.display = 'block';
-    } else {
-        document.getElementById('landingPage').style.display = 'block';
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-window.showDashboard = showDashboard;
+// NOTE: The static "Privacy / Terms / Support / Contact" pages and their
+// window.showPage() router are defined once, in index.html (see the
+// "STATIC PAGE SYSTEM" inline script). That version owns all four pages and
+// is wired to the footer's "smart back" behavior. app.js used to define a
+// second, incomplete copy of showPage() here (only 2 of the 4 pages) that
+// loaded *after* the HTML's version and silently overwrote it — clicking
+// "Terms of Service" or "Contact Us" in the footer did nothing as a result.
+// That duplicate has been removed; do not redefine window.showPage here.
 
 function hideAuthTabs() {
     document.getElementById('authTabsContainer').style.display = 'none';
@@ -151,6 +113,7 @@ function waitForFirebase(timeout = 10000) {
 
 function mapFirebaseError(err) {
     if (!err) return 'An unknown error occurred.';
+    // Firebase errors often have a code property (auth/xxx). Firestore permission issues may be strings.
     const code = err.code || (err && err.message) || '';
     if (typeof code === 'string') {
         if (code.includes('auth/invalid-email')) return 'The email address is not valid.';
@@ -163,14 +126,15 @@ function mapFirebaseError(err) {
         if (code.includes('not-found')) return 'Requested data was not found.';
         if (code.includes('network-request-failed')) return 'Network error. Check your connection.';
     }
+    // Fallback to err.message when available
     return err.message || String(err);
 }
 
 function setLoading(state) {
     isLoading = state;
     if (state) {
-        // Uses the CSS .loader class added in the CSS file
-        cropContainer.innerHTML = '<div class="loader" aria-busy="true"></div>';
+        // simple inline loader — keeps UX improvements minimal and self-contained
+        cropContainer.innerHTML = '<div class="loader" aria-busy="true" style="grid-column:1/-1;padding:2rem;text-align:center;">Loading listings...</div>';
         resultCountEl.textContent = 'Loading...';
     }
 }
@@ -193,29 +157,41 @@ function renderListings(listings, append = false) {
         return;
     }
 
-    // Fix: Keep a running total if appending
-    const currentCount = append ? cropContainer.children.length : 0;
-    resultCountEl.textContent = `${currentCount + listings.length} listing${(currentCount + listings.length) !== 1 ? 's' : ''}`;
+    // Firestore pagination means we only ever know the count of the current
+    // page, not the total number of matching listings — so we count what's
+    // actually rendered in the grid rather than just this batch, and phrase
+    // it as "showing" to avoid implying it's a grand total.
+    const totalRendered = append ? cropContainer.querySelectorAll('.card').length + listings.length : listings.length;
+    resultCountEl.textContent = `Showing ${totalRendered} listing${totalRendered !== 1 ? 's' : ''}`;
 
     listings.forEach((item) => {
+        // Escape every field before interpolating — listing data comes from
+        // Firestore and can be created by any signed-in user, so it must be
+        // treated as untrusted input (prevents stored XSS via a malicious
+        // crop name, farmer name, phone number, etc.).
+        const name       = escapeHtml(item.name || 'Unnamed listing');
+        const location   = escapeHtml(item.location || '');
+        const category   = escapeHtml(item.category || '');
+        const farmerName = escapeHtml(item.farmer_name || '');
+        const phone      = escapeHtml(item.phone || '');
+        const imageUrl   = escapeHtml(item.image_url || FALLBACK_IMAGE);
+
         const card = document.createElement('div');
-        card.className = 'card float-in';
-        
-        // SECURITY FIX: Wrapped all dynamic user data in escapeHtml()
+        card.className = 'card';
         card.innerHTML = `
-            <img src="${escapeHtml(item.image_url || FALLBACK_IMAGE)}" alt="${escapeHtml(item.name)}" class="card-img" onerror="this.src='${FALLBACK_IMAGE}'">
+            <img src="${imageUrl}" alt="${name}" class="card-img" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}'">
             <div class="card-content">
                 <div class="badge-row">
-                    ${item.location ? `<span class="badge badge-location"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(item.location)}</span>` : ''}
-                    ${item.category ? `<span class="badge badge-category">${escapeHtml(item.category)}</span>` : ''}
+                    ${location ? `<span class="badge badge-location"><i class="fa-solid fa-location-dot"></i> ${location}</span>` : ''}
+                    ${category ? `<span class="badge badge-category">${category}</span>` : ''}
                 </div>
-                <h3 class="card-title">${escapeHtml(item.name)}</h3>
+                <h3 class="card-title">${name}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
                 <div class="card-meta">
-                    ${item.farmer_name ? `<p><i class="fa-solid fa-user"></i> ${escapeHtml(item.farmer_name)}</p>` : ''}
-                    ${item.phone ? `<p><i class="fa-solid fa-phone"></i> <a href="tel:${escapeHtml(item.phone)}">${escapeHtml(item.phone)}</a></p>` : ''}
+                    ${farmerName ? `<p><i class="fa-solid fa-user"></i> ${farmerName}</p>` : ''}
+                    ${phone ? `<p><i class="fa-solid fa-phone"></i> <a href="tel:${phone}">${phone}</a></p>` : ''}
                 </div>
-                ${item.phone ? `<button class="btn-contact" onclick="window.location.href='tel:${escapeHtml(item.phone)}'"><i class="fa-solid fa-phone"></i> Contact Farmer</button>` : ''}
+                ${phone ? `<button class="btn-contact" onclick="window.location.href='tel:${phone}'"><i class="fa-solid fa-phone"></i> Contact Farmer</button>` : ''}
             </div>
         `;
         cropContainer.appendChild(card);
@@ -223,10 +199,9 @@ function renderListings(listings, append = false) {
 }
 
 function renderPaginationControls(hasMore = false) {
+    // Remove old controls
     const old = document.getElementById('paginationControls');
     if (old) old.remove();
-
-    if (!hasMore) return; // Don't show button if there's no more data
 
     const wrapper = document.createElement('div');
     wrapper.id = 'paginationControls';
@@ -236,9 +211,9 @@ function renderPaginationControls(hasMore = false) {
     wrapper.style.marginTop = '1rem';
 
     const loadMore = document.createElement('button');
-    loadMore.id = 'loadMoreBtn'; // Added ID for easy targeting
     loadMore.className = 'btn-outline';
     loadMore.textContent = 'Load more';
+    loadMore.disabled = !hasMore;
     loadMore.addEventListener('click', async () => {
         await loadMoreCrops();
     });
@@ -247,6 +222,7 @@ function renderPaginationControls(hasMore = false) {
     cropContainer.parentNode.appendChild(wrapper);
 }
 
+// Server-side Firestore fetch with pagination. Supports location filter and prefix-search on name_lower
 async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page = 1, pageSizeLocal = pageSize, startAfterDoc = null } = {}) {
     const db = window.firebaseDb;
     const { collection, getDocs, query, where, orderBy, limit, startAfter } = window.dbFns;
@@ -255,22 +231,28 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
         const cropsCol = collection(db, 'crops');
         let q = null;
 
+        // Build query parts
         const constraints = [];
 
         if (location && location !== 'All') {
             constraints.push(where('location', '==', location));
         }
 
+        // For server-side search we attempt a prefix search on a lowercase field 'name_lower'.
+        // This requires that documents include a 'name_lower' string field.
         const normalizedSearch = (searchTerm || '').trim().toLowerCase();
         if (normalizedSearch) {
+            // Firestore prefix range trick
             const end = normalizedSearch + '\\uf8ff';
             constraints.push(where('name_lower', '>=', normalizedSearch));
             constraints.push(where('name_lower', '<=', end));
         }
 
+        // If constraints are present, compose a query. We'll order by name_lower if searching, otherwise by created_at or name.
         if (normalizedSearch) {
             constraints.push(orderBy('name_lower'));
         } else {
+            // If collection has a created_at field, that would be better. Fallback to name ordering.
             try {
                 constraints.push(orderBy('created_at', 'desc'));
             } catch (e) {
@@ -278,6 +260,7 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
             }
         }
 
+        // Pagination
         constraints.push(limit(pageSizeLocal));
         if (startAfterDoc) {
             constraints.push(startAfter(startAfterDoc));
@@ -288,14 +271,18 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
         const snap = await getDocs(q);
         const docs = snap.docs.map((d) => ({ id: d.id, ...d.data(), _snap: d }));
         const hasMore = docs.length === pageSizeLocal;
+        // Save lastVisible for next page
         lastVisible = docs.length ? docs[docs.length - 1]._snap : null;
 
+        // Strip _snap before returning
         const clean = docs.map(({ _snap, ...rest }) => rest);
         return { data: clean, hasMore };
     } catch (err) {
+        // If the server-side search failed because documents lack 'name_lower', fallback to a simple unfiltered read
         const msg = String(err && err.message ? err.message : err);
         if (msg.includes('Field') || msg.includes('name_lower') || msg.includes('invalid-argument')) {
             console.warn('Prefix search failed, falling back to client-side search. Error:', err);
+            // get all (or location-filtered) docs then filter client-side
             try {
                 const cropsCol = collection(db, 'crops');
                 let q2 = null;
@@ -303,6 +290,7 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
                 if (location && location !== 'All') parts.push(where('location', '==', location));
                 parts.push(limit(pageSizeLocal));
                 if (startAfterDoc) parts.push(startAfter(startAfterDoc));
+                // Order by name for consistent results
                 parts.push(orderBy('name'));
                 q2 = query(cropsCol, ...parts);
                 const snap = await getDocs(q2);
@@ -311,11 +299,11 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
                 const clean = docs.map(({ _snap, ...rest }) => rest);
                 return { data: clean, hasMore: clean.length === pageSizeLocal };
             } catch (err2) {
-                throw err2; 
+                throw err2; // let outer handler map error
             }
         }
 
-        throw err; 
+        throw err; // rethrow for outer handler
     }
 }
 
@@ -340,30 +328,21 @@ async function loadMoreCrops() {
         triggerToast('No more listings');
         return;
     }
-
-    // BUG FIX: Instead of wiping the grid with setLoading(true), we target the button directly
-    const btn = document.getElementById('loadMoreBtn');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Loading...';
-    }
-
+    setLoading(true);
     try {
         const { data, hasMore } = await fetchCropsFromFirestore({ searchTerm: currentQueryOptions.searchTerm, location: currentQueryOptions.location, pageSizeLocal: pageSize, startAfterDoc: lastVisible });
-        
+        setLoading(false);
         if (data && data.length) renderListings(data, true);
-        renderPaginationControls(hasMore); // This removes old button and creates new one with updated state
+        renderPaginationControls(hasMore);
     } catch (err) {
+        setLoading(false);
         console.error('Failed to load more crops', err);
         triggerToast(mapFirebaseError(err));
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Load more'; // Reset button text on error
-        }
     }
 }
 
 async function applyFilters() {
+    // Called when user submits search/filter. Reset pagination and load from server with filters
     const searchTerm = document.getElementById('searchInput').value.trim();
     const location   = document.getElementById('locationFilter').value;
     currentQueryOptions = { searchTerm, location };
@@ -387,12 +366,12 @@ async function initApp() {
     // Auth state observer
     onAuthStateChanged(auth, async (user) => {
         if (user) {
+            // User is signed in
             landingPage.style.display = 'none';
-            document.getElementById('staticPageContainer').style.display = 'none';
             dashboardApp.style.display = 'block';
 
             navMenu.innerHTML = `
-                <span class="nav-link"><i class="fa-solid fa-user-check"></i> ${escapeHtml(user.email)}</span>
+                <span class="nav-link"><i class="fa-solid fa-user-check"></i> ${user.email}</span>
                 <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
             `;
             document.getElementById('navLogoutBtn').addEventListener('click', async () => {
@@ -405,8 +384,10 @@ async function initApp() {
                 }
             });
 
+            // Load initial crops for signed-in user
             await loadInitialCrops();
         } else {
+            // No user
             landingPage.style.display = 'block';
             dashboardApp.style.display = 'none';
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
@@ -423,11 +404,13 @@ async function initApp() {
 
         try {
             const cred = await createUserWithEmailAndPassword(auth, email, password);
-            
-            // CLEANUP FIX: Removed manual hiding/showing of pages. 
-            // onAuthStateChanged triggers instantly on createUserWithEmailAndPassword and handles the UI switch seamlessly.
+            // Save user profile...
 
+            landingPage.style.display = "none";
+            dashboardApp.style.display = "block";
+            await loadInitialCrops();
             const uid = cred.user.uid;
+            // create a user profile document
             try {
                 await setDoc(doc(db, 'users', uid), { full_name: name, email, created_at: new Date().toISOString() });
             } catch (err) {
@@ -450,18 +433,17 @@ async function initApp() {
 
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            
-            // CLEANUP FIX: Removed manual hiding/showing of pages.
-            
+            landingPage.style.display = "none";
+            dashboardApp.style.display = "block";
+            await loadInitialCrops();
             closeModal();
-            triggerToast('Welcome back!');
         } catch (err) {
             console.error('Sign in failed', err);
             triggerToast(mapFirebaseError(err));
         }
     });
 
-    // Password reset
+    // Password reset (send reset email)
     resetForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('resetEmail').value;
@@ -486,52 +468,17 @@ async function initApp() {
     document.getElementById('tabRegister')?.addEventListener('click', () => { showAuthTabs(); switchTab('register'); });
     document.getElementById('forgotPasswordLink')?.addEventListener('click', (e) => { e.preventDefault(); hideAuthTabs(); switchTab('reset'); });
     document.getElementById('backToLoginLink')?.addEventListener('click', (e) => { e.preventDefault(); showAuthTabs(); switchTab('login'); });
-    document.getElementById('btnStartLogin')?.addEventListener('click', () => openModal('login'));
-    document.getElementById('btnStartRegister')?.addEventListener('click', () => openModal('register'));
 
-    const ctaLoginBtn = document.getElementById('btnCtaLogin');
-    const ctaRegisterBtn = document.getElementById('btnCtaRegister');
-    if (ctaLoginBtn) ctaLoginBtn.addEventListener('click', () => openModal('login'));
-    if (ctaRegisterBtn) ctaRegisterBtn.addEventListener('click', () => openModal('register'));
+    // NOTE: previously this function also wired up #btnStartLogin,
+    // #btnStartRegister, #btnCtaLogin, #btnCtaRegister, #navToggle/#navLinks,
+    // .nav-page-link, and #contactForm. None of those elements exist in the
+    // current index.html (the mobile menu is #mobileToggle/#mobileMenu and
+    // the landing page has no #contactForm) — that was dead code left over
+    // from an earlier version of the markup and has been removed. The
+    // current mobile menu and in-page nav links are already handled by the
+    // "Landing page interactivity" inline script in index.html.
 
-    // Mobile nav toggle
-    const navToggle = document.getElementById('navToggle');
-    const navLinksEl = document.getElementById('navLinks');
-    if (navToggle && navLinksEl) {
-        navToggle.addEventListener('click', () => {
-            const isOpen = navLinksEl.classList.toggle('open');
-            navToggle.setAttribute('aria-expanded', String(isOpen));
-        });
-    }
-
-    // Smooth-scroll in-page nav links
-    document.querySelectorAll('.nav-page-link').forEach((link) => {
-        link.addEventListener('click', (e) => {
-            const href = link.getAttribute('href') || '';
-            if (href.startsWith('#')) {
-                e.preventDefault();
-                const targetId = href.slice(1);
-                if (document.getElementById('staticPageContainer').style.display !== 'none') {
-                    showDashboard();
-                }
-                scrollToSection(targetId);
-            }
-            if (navLinksEl && navLinksEl.classList.contains('open')) {
-                navLinksEl.classList.remove('open');
-                navToggle.setAttribute('aria-expanded', 'false');
-            }
-        });
-    });
-
-    // Contact form
-    const contactForm = document.getElementById('contactForm');
-    if (contactForm) {
-        contactForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            triggerToast('Thanks for reaching out! We will get back to you soon.');
-            contactForm.reset();
-        });
-    }
+    // Load initial UI state: we rely on onAuthStateChanged to set the proper view
 }
 
 // Initialize app when DOM is ready
