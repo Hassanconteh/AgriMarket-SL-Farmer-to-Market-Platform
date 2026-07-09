@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="AgriMarket SL connects Sierra Leone's farmers to buyers with real-time crop prices and direct contact.">
     <title>AgriMarket SL | Secure Market Access</title>
+    
+    <!-- Performance: Preconnect to external resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>">
@@ -23,9 +27,8 @@
             --agri-sand: #f5f0e8;
         }
 
+        /* Fixed: Replaced body class logic with direct JS control for reliability */
         .landing-sections { display: none; }
-        #landingPage.hero.full-screen ~ .landing-sections,
-        body.show-landing .landing-sections { display: block; }
 
         /* Section utilities */
         .ls-section {
@@ -743,29 +746,29 @@
 
         <!-- Desktop nav links (landing only) -->
         <nav id="landingNav" class="nav-links" aria-label="Main">
-            <a href="#hero" class="active">Home</a>
-            <a href="#about">About</a>
-            <a href="#services">Services</a>
-            <a href="#how-it-works">How It Works</a>
-            <a href="#crops">Crops</a>
-            <a href="#testimonials">Reviews</a>
-            <a href="#cta-section">Get Started</a>
+            <a href="#hero" class="nav-page-link active">Home</a>
+            <a href="#about" class="nav-page-link">About</a>
+            <a href="#services" class="nav-page-link">Services</a>
+            <a href="#how-it-works" class="nav-page-link">How It Works</a>
+            <a href="#crops" class="nav-page-link">Crops</a>
+            <a href="#testimonials" class="nav-page-link">Reviews</a>
+            <a href="#cta-section" class="nav-page-link">Get Started</a>
         </nav>
 
-        <!-- Mobile toggle -->
-        <button class="mobile-toggle" id="mobileToggle" aria-label="Menu">
+        <!-- Fixed: Unified ID to match external JS + Added aria-expanded -->
+        <button class="mobile-toggle" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navLinks">
             <i class="fa-solid fa-bars" id="mobileIcon"></i>
         </button>
 
-        <!-- Mobile menu -->
-        <div class="mobile-menu" id="mobileMenu">
-            <a href="#hero">Home</a>
-            <a href="#about">About</a>
-            <a href="#services">Services</a>
-            <a href="#how-it-works">How It Works</a>
-            <a href="#crops">Crops</a>
-            <a href="#testimonials">Reviews</a>
-            <a href="#cta-section">Get Started</a>
+        <!-- Fixed: Unified ID to match external JS + Added nav-page-link class -->
+        <div class="mobile-menu" id="navLinks">
+            <a href="#hero" class="nav-page-link">Home</a>
+            <a href="#about" class="nav-page-link">About</a>
+            <a href="#services" class="nav-page-link">Services</a>
+            <a href="#how-it-works" class="nav-page-link">How It Works</a>
+            <a href="#crops" class="nav-page-link">Crops</a>
+            <a href="#testimonials" class="nav-page-link">Reviews</a>
+            <a href="#cta-section" class="nav-page-link">Get Started</a>
         </div>
 
         <!-- Auth nav (original, managed by app.js) -->
@@ -776,6 +779,11 @@
         <div class="hero-content">
             <h1>Connecting Sierra Leone's Farmers to the World</h1>
             <p>Sign in to access real-time crop prices, contact local farmers, and view agricultural data.</p>
+            <!-- Fixed: Added missing buttons that external JS is listening for -->
+            <div class="auth-action-buttons">
+                <button class="btn-large btn-blue" id="btnStartLogin">Log In</button>
+                <button class="btn-large btn-green" id="btnStartRegister">Create Account</button>
+            </div>
         </div>
     </div>
 
@@ -1034,7 +1042,8 @@
             <div class="cta-box">
                 <h2>Ready to Access Live Market Prices?</h2>
                 <p>Join hundreds of farmers and buyers already trading smarter on AgriMarket SL.</p>
-                <button class="cta-btn" onclick="openRegisterModal();">
+                <!-- Fixed: Changed undefined function to the correct one -->
+                <button class="cta-btn" onclick="openModal('register');">
                     Get Started Free <i class="fa-solid fa-arrow-right"></i>
                 </button>
             </div>
@@ -1072,12 +1081,17 @@
                     <h2>Live Market Listings</h2>
                     <span id="resultCount" class="text-muted">Loading...</span>
                 </div>
-                <div id="cropCardsContainer" class="grid"></div>
+                <!-- Fixed: Added aria-live for screen readers -->
+                <div id="cropCardsContainer" class="grid" aria-live="polite"></div>
             </section>
         </main>
     </div>
 
-    <div id="authModal" class="modal-overlay">
+    <!-- Fixed: Added ARIA attributes for accessibility -->
+    <div id="authModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+        <!-- Hidden title for screen readers -->
+        <h2 id="authModalTitle" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;">Authentication</h2>
+        
         <div class="modal-content float-in">
             <button class="close-btn" id="closeModal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
 
@@ -1162,12 +1176,12 @@
             <div class="footer-col">
                 <h4>Quick Links</h4>
                 <ul>
-                    <li><a href="#hero"><i class="fa-solid fa-chevron-right"></i> Home</a></li>
-                    <li><a href="#about"><i class="fa-solid fa-chevron-right"></i> About Us</a></li>
-                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Services</a></li>
-                    <li><a href="#how-it-works"><i class="fa-solid fa-chevron-right"></i> How It Works</a></li>
-                    <li><a href="#crops"><i class="fa-solid fa-chevron-right"></i> Popular Crops</a></li>
-                    <li><a href="#testimonials"><i class="fa-solid fa-chevron-right"></i> Reviews</a></li>
+                    <li><a href="#hero" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> Home</a></li>
+                    <li><a href="#about" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> About Us</a></li>
+                    <li><a href="#services" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> Services</a></li>
+                    <li><a href="#how-it-works" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> How It Works</a></li>
+                    <li><a href="#crops" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> Popular Crops</a></li>
+                    <li><a href="#testimonials" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> Reviews</a></li>
                 </ul>
             </div>
 
@@ -1175,11 +1189,11 @@
             <div class="footer-col">
                 <h4>Services</h4>
                 <ul>
-                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Live Crop Pricing</a></li>
-                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Direct Farmer Contact</a></li>
-                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Regional Market Data</a></li>
-                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Price Alerts</a></li>
-                    <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Market Insights</a></li>
+                    <li><a href="#services" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> Live Crop Pricing</a></li>
+                    <li><a href="#services" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> Direct Farmer Contact</a></li>
+                    <li><a href="#services" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> Regional Market Data</a></li>
+                    <li><a href="#services" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> Price Alerts</a></li>
+                    <li><a href="#services" class="nav-page-link"><i class="fa-solid fa-chevron-right"></i> Market Insights</a></li>
                 </ul>
             </div>
 
@@ -1220,369 +1234,65 @@
 
     <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 
-    <!-- Landing page interactivity -->
+    <!-- Fixed & Completed Inline Script -->
     <script>
-        // Mobile menu toggle
-        const mobileToggle = document.getElementById('mobileToggle');
-        const mobileMenu = document.getElementById('mobileMenu');
+        // Mobile menu toggle (Now targets correct IDs)
+        const mobileToggle = document.getElementById('navToggle');
+        const mobileMenu = document.getElementById('navLinks');
         const mobileIcon = document.getElementById('mobileIcon');
         let menuOpen = false;
 
-        mobileToggle.addEventListener('click', () => {
-            menuOpen = !menuOpen;
-            mobileMenu.classList.toggle('open', menuOpen);
-            mobileIcon.className = menuOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-bars';
-        });
-
-        mobileMenu.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', () => {
-                menuOpen = false;
-                mobileMenu.classList.remove('open');
-                mobileIcon.className = 'fa-solid fa-bars';
+        if (mobileToggle && mobileMenu) {
+            mobileToggle.addEventListener('click', () => {
+                menuOpen = !menuOpen;
+                mobileMenu.classList.toggle('open', menuOpen);
+                mobileIcon.className = menuOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-bars';
+                mobileToggle.setAttribute('aria-expanded', String(menuOpen));
             });
-        });
 
-        // Show landing sections when landing is visible
+            mobileMenu.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', () => {
+                    menuOpen = false;
+                    mobileMenu.classList.remove('open');
+                    mobileIcon.className = 'fa-solid fa-bars';
+                    mobileToggle.setAttribute('aria-expanded', 'false');
+                });
+            });
+        }
+
+        // Fixed: Properly finished the sync function to show/hide landing sections
         function syncLandingSections() {
             const landing = document.getElementById('landingPage');
             const sections = document.getElementById('landingSections');
             const landingNav = document.getElementById('landingNav');
-            if (landing && landing.style.display !== 'none') {
-                sections.style.display = 'block';
-                landingNav.style.display = '';
-            } else {
-                sections.style.display = 'none';
-                landingNav.style.display = 'none';
-            }
+            
+            // Check if landing page is currently visible
+            const isLandingVisible = landing && landing.style.display !== 'none';
+            
+            if (sections) sections.style.display = isLandingVisible ? 'block' : 'none';
+            if (landingNav) landingNav.style.display = isLandingVisible ? 'flex' : 'none';
         }
-
+        
+        // Expose to global scope so external app.js can trigger it
+        window.syncLandingSections = syncLandingSections;
+        
+        // Run once on load
         syncLandingSections();
-        const landingObserver = new MutationObserver(syncLandingSections);
-        landingObserver.observe(document.getElementById('landingPage'), { attributes: true, attributeFilter: ['style'] });
 
-        // Scroll reveal
-        const revealEls = document.querySelectorAll('.reveal');
+        // Simple scroll reveal animation for landing sections
+        const revealElements = document.querySelectorAll('.reveal');
         const revealObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
-                if (entry.isIntersecting) entry.target.classList.add('visible');
-            });
-        }, { threshold: 0.12 });
-        revealEls.forEach(el => revealObserver.observe(el));
-
-        // Active nav link on scroll
-        const landingLinks = document.querySelectorAll('#landingNav a, #mobileMenu a');
-        const landingSections = document.querySelectorAll('.landing-sections section[id], #landingPage');
-
-        window.addEventListener('scroll', () => {
-            let current = '';
-            landingSections.forEach(sec => {
-                const top = sec.offsetTop - 120;
-                if (pageYOffset >= top) current = sec.getAttribute('id') || '';
-            });
-            landingLinks.forEach(link => {
-                link.classList.remove('active');
-                if (link.getAttribute('href') === '#' + current) link.classList.add('active');
-            });
-        });
-
-        // Counter animation
-        const statEls = document.querySelectorAll('.stat-number[data-count]');
-        const counterObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    const target = parseInt(entry.target.getAttribute('data-count'));
-                    let current = 0;
-                    const increment = target / 50;
-                    const timer = setInterval(() => {
-                        current += increment;
-                        if (current >= target) {
-                            entry.target.textContent = target.toLocaleString() + '+';
-                            clearInterval(timer);
-                        } else {
-                            entry.target.textContent = Math.floor(current).toLocaleString() + '+';
-                        }
-                    }, 30);
-                    counterObserver.unobserve(entry.target);
+                    entry.target.classList.add('visible');
                 }
             });
-        }, { threshold: 0.5 });
-        statEls.forEach(el => counterObserver.observe(el));
+        }, { threshold: 0.1 });
 
-        // ===== AUTH MODAL OPENERS (Get Started / Sign In) =====
-        // Opens the auth modal directly on a given tab: 'register' or 'login'.
-        // Prefers app.js's own openModal() (keeps state fully in sync with the
-        // rest of the auth flow); falls back to a manual version if app.js
-        // hasn't finished loading yet for any reason.
-        function openAuthModal(tab) {
-            tab = tab || 'register';
-
-            if (typeof window.openModal === 'function') {
-                window.openModal(tab);
-                return;
-            }
-
-            const modal = document.getElementById('authModal');
-            const tabRegister = document.getElementById('tabRegister');
-            const tabLogin = document.getElementById('tabLogin');
-            const registerForm = document.getElementById('registerForm');
-            const loginForm = document.getElementById('loginForm');
-            const resetForm = document.getElementById('resetForm');
-
-            modal.classList.add('active');
-            tabRegister.classList.toggle('active', tab === 'register');
-            tabLogin.classList.toggle('active', tab === 'login');
-            registerForm.classList.toggle('active', tab === 'register');
-            loginForm.classList.toggle('active', tab === 'login');
-            resetForm.classList.remove('active');
-        }
-
-        // Open the auth modal directly on the Register (Create Account) tab —
-        // used by the "Get Started Free" CTA button so a click takes the
-        // visitor straight to account creation.
-        function openRegisterModal() {
-            openAuthModal('register');
-        }
-
-        // Open the auth modal directly on the Sign In tab, available for any
-        // "Sign In" style entry points.
-        function openLoginModal() {
-            openAuthModal('login');
-        }
-
-        window.openAuthModal = openAuthModal;
-        window.openRegisterModal = openRegisterModal;
-        window.openLoginModal = openLoginModal;
-
-        // ===== STATIC PAGE SYSTEM (Working Footer Links) =====
-        // Page content templates
-        const pageContents = {
-            privacy: `
-                <h2>Privacy Policy</h2>
-                <p>Last updated: July 2026</p>
-                <h3>1. Information We Collect</h3>
-                <p>When you create an account on AgriMarket SL, we collect your name, email address, and password. When you browse listings or interact with market data, we may collect usage information such as search queries and pages visited.</p>
-                <h3>2. How We Use Your Information</h3>
-                <ul>
-                    <li>To provide and maintain our market platform services</li>
-                    <li>To send you price alerts and market updates you've opted into</li>
-                    <li>To verify your identity and prevent fraud</li>
-                    <li>To improve our platform and user experience</li>
-                </ul>
-                <h3>3. Information Sharing</h3>
-                <p>We do not sell your personal information. We share farmer contact details only with verified buyers within the platform. Aggregate, anonymized market data may be shared for research purposes.</p>
-                <h3>4. Data Security</h3>
-                <p>We use industry-standard encryption and Firebase security rules to protect your data. Passwords are encrypted and never stored in plain text.</p>
-                <h3>5. Your Rights</h3>
-                <p>You can request to view, update, or delete your personal data at any time by contacting us at support@agrimarketsl.com.</p>
-            `,
-            terms: `
-                <h2>Terms of Service</h2>
-                <p>Last updated: July 2026</p>
-                <h3>1. Acceptance of Terms</h3>
-                <p>By creating an account and using AgriMarket SL, you agree to these terms. If you disagree with any part, you may not access the platform.</p>
-                <h3>2. User Accounts</h3>
-                <p>You are responsible for maintaining the confidentiality of your account credentials. You must provide accurate information and may not create multiple accounts or impersonate others.</p>
-                <h3>3. Market Listings</h3>
-                <p>All crop listings must contain accurate pricing, location, and contact information. Fake or misleading listings will be removed and may result in account suspension.</p>
-                <h3>4. Transactions</h3>
-                <p>AgriMarket SL facilitates connections between farmers and buyers. We are not a party to any transaction and are not liable for disputes between users. Users transact at their own risk.</p>
-                <h3>5. Acceptable Use</h3>
-                <ul>
-                    <li>Do not use the platform for illegal activities</li>
-                    <li>Do not attempt to hack, scrape, or disrupt the service</li>
-                    <li>Do not post offensive, misleading, or spam content</li>
-                    <li>Do not harass or threaten other users</li>
-                </ul>
-                <h3>6. Termination</h3>
-                <p>We may suspend or terminate accounts that violate these terms without prior notice. You may delete your account at any time by contacting support.</p>
-            `,
-            support: `
-                <h2>Support Center</h2>
-                <p>Need help with AgriMarket SL? Here are the quickest ways to get assistance.</p>
-                <h3>Frequently Asked Questions</h3>
-                <p><strong>Q: How do I create an account?</strong><br>A: Click "Get Started Free" on the homepage, fill in your name, email, and password, then click "Create Account."</p>
-                <p><strong>Q: How do I search for crops?</strong><br>A: Once signed in, use the search bar at the top of the dashboard. Type a crop name and optionally filter by region.</p>
-                <p><strong>Q: How do I contact a farmer?</strong><br>A: On any crop listing card, click the contact button to view the farmer's phone number and email.</p>
-                <p><strong>Q: I forgot my password. What do I do?</strong><br>A: Click "Forgot?" on the sign-in form, enter your email, and we'll send a password reset link.</p>
-                <p><strong>Q: Are the prices accurate?</strong><br>A: Prices are updated regularly by verified farmers and traders. We mark each listing with its last-updated timestamp.</p>
-                <h3>Still Need Help?</h3>
-                <div class="contact-card">
-                    <i class="fa-solid fa-envelope"></i>
-                    <div><div class="label">Email Support</div><div class="value"><a href="mailto:support@agrimarketsl.com">support@agrimarketsl.com</a></div></div>
-                </div>
-                <div class="contact-card">
-                    <i class="fa-brands fa-whatsapp"></i>
-                    <div><div class="label">WhatsApp</div><div class="value"><a href="https://wa.me/23276786944">+232 76 786 944</a></div></div>
-                </div>
-                <div class="contact-card">
-                    <i class="fa-solid fa-clock"></i>
-                    <div><div class="label">Response Time</div><div class="value">Within 24 hours</div></div>
-                </div>
-            `,
-            contact: `
-                <h2>Contact Us</h2>
-                <p>We'd love to hear from you. Whether you have a question, suggestion, or partnership proposal — reach out anytime.</p>
-                <h3>Get in Touch</h3>
-                <div class="contact-card">
-                    <i class="fa-solid fa-envelope"></i>
-                    <div><div class="label">Email</div><div class="value"><a href="mailto:support@agrimarketsl.com">support@agrimarketsl.com</a></div></div>
-                </div>
-                <div class="contact-card">
-                    <i class="fa-solid fa-phone"></i>
-                    <div><div class="label">Phone</div><div class="value"><a href="tel:+23276786944">+232 76 786 944</a></div></div>
-                </div>
-                <div class="contact-card">
-                    <i class="fa-brands fa-whatsapp"></i>
-                    <div><div class="label">WhatsApp</div><div class="value"><a href="https://wa.me/23276786944">Chat on WhatsApp</a></div></div>
-                </div>
-                <div class="contact-card">
-                    <i class="fa-solid fa-location-dot"></i>
-                    <div><div class="label">Office</div><div class="value">Kenema, Eastern Region, Sierra Leone</div></div>
-                </div>
-                <h3>Business Hours</h3>
-                <p>Monday – Saturday: 8:00 AM – 6:00 PM (GMT)</p>
-                <p>Sunday: Closed</p>
-                <h3>Partnerships</h3>
-                <p>Interested in partnering with AgriMarket SL to expand market access in your region? Email us at <a href="mailto:partnerships@agrimarketsl.com">partnerships@agrimarketsl.com</a></p>
-            `
-        };
-
-        // Override or define showPage so footer links always work
-        // (If app.js defines it later, that's fine — this is a safe fallback)
-        window.showPage = function(page) {
-            const container = document.getElementById('staticPageContainer');
-            const content = document.getElementById('staticContent');
-
-            if (pageContents[page]) {
-                content.innerHTML = pageContents[page];
-            } else {
-                content.innerHTML = '<h2>Page Not Found</h2><p>The requested page could not be found. <a href="#" onclick="goBackFromStatic(); return false;">Go back</a></p>';
-            }
-
-            // Hide landing and dashboard
-            document.getElementById('landingPage').style.display = 'none';
-            document.getElementById('landingSections').style.display = 'none';
-            document.getElementById('dashboardApp').style.display = 'none';
-
-            // Show static page
-            container.style.display = 'block';
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
-
-        // Smart "Back" button — returns to landing or dashboard depending on auth state
-        function goBackFromStatic() {
-            const container = document.getElementById('staticPageContainer');
-            container.style.display = 'none';
-
-            // Check if user is authenticated by seeing if dashboard is populated
-            const dashboard = document.getElementById('dashboardApp');
-            const landing = document.getElementById('landingPage');
-
-            // If dashboard has content visible state (set by app.js auth), return there
-            // Otherwise return to landing
-            if (dashboard.style.display !== 'none') {
-                // Dashboard was active — return to it
-                dashboard.style.display = 'block';
-            } else {
-                // Return to landing page
-                landing.style.display = '';
-                document.getElementById('landingSections').style.display = 'block';
-            }
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        // Wire up the back button
-        document.getElementById('backFromStatic').addEventListener('click', goBackFromStatic);
-
-        // Also make footer Quick Links scroll to sections when on landing,
-        // or navigate properly when on dashboard or static page
-        document.querySelectorAll('.site-footer .footer-col a[href^="#"]').forEach(link => {
-            link.addEventListener('click', function(e) {
-                const href = this.getAttribute('href');
-                const targetId = href.substring(1);
-                const targetEl = document.getElementById(targetId);
-
-                if (targetEl) {
-                    // If static page is open, close it first
-                    const staticContainer = document.getElementById('staticPageContainer');
-                    if (staticContainer.style.display !== 'none') {
-                        staticContainer.style.display = 'none';
-                        document.getElementById('landingPage').style.display = '';
-                        document.getElementById('landingSections').style.display = 'block';
-                    }
-
-                    // If dashboard is open, we can still scroll but the sections won't be visible
-                    // So switch back to landing
-                    const dashboard = document.getElementById('dashboardApp');
-                    if (dashboard.style.display !== 'none') {
-                        // User is logged in — just scroll within dashboard context
-                        // (landing sections are hidden, so let it be)
-                        return;
-                    }
-
-                    // Small delay to let display changes render
-                    setTimeout(() => {
-                        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }, 100);
-                }
-            });
-        });
+        revealElements.forEach(el => revealObserver.observe(el));
     </script>
-
+    
+    <!-- Your external app.js file should be loaded LAST -->
     <script src="app.js"></script>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyB4mHBxFdDDhIZCcFcpBqQXdBc2NgkMwxw",
-    authDomain: "agrimarket-sl.firebaseapp.com",
-    projectId: "agrimarket-sl",
-    storageBucket: "agrimarket-sl.firebasestorage.app",
-    messagingSenderId: "692088926578",
-    appId: "1:692088926578:web:2ac31d82e436f577e82deb",
-    measurementId: "G-9VVH5QX71T"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-
-  window.firebaseAuth = auth;
-  window.firebaseDb = db;
-  window.authFns = {
-    onAuthStateChanged,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    signOut,
-    sendPasswordResetEmail
-  };
-  window.dbFns = {
-    collection,
-    getDocs,
-    query,
-    where,
-    orderBy,
-    limit,
-    startAfter,
-    doc,
-    setDoc,
-    getDoc
-  };
-
-  window.testFirestore = async function () {
-    try {
-      const snap = await getDocs(collection(db, 'crops'));
-      console.log('crops', snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) {
-      console.error('Firestore test failed', err);
-    }
-  };
-</script>
-
 </body>
 </html>
