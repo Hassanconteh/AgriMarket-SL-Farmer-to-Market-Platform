@@ -15,9 +15,16 @@ const resultCountEl = document.getElementById('resultCount');
 
 // Pagination & query state
 let pageSize = 8;
-let lastVisible = null; // last document snapshot for pagination
+let lastVisible = null; 
 let isLoading = false;
 let currentQueryOptions = { searchTerm: '', location: 'All' };
+
+// SECURITY FIX: Sanitize strings to prevent XSS attacks when injecting into innerHTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = String(text || '');
+    return div.innerHTML;
+}
 
 function triggerToast(message) {
     const container = document.getElementById('toastContainer');
@@ -144,7 +151,6 @@ function waitForFirebase(timeout = 10000) {
 
 function mapFirebaseError(err) {
     if (!err) return 'An unknown error occurred.';
-    // Firebase errors often have a code property (auth/xxx). Firestore permission issues may be strings.
     const code = err.code || (err && err.message) || '';
     if (typeof code === 'string') {
         if (code.includes('auth/invalid-email')) return 'The email address is not valid.';
@@ -157,15 +163,14 @@ function mapFirebaseError(err) {
         if (code.includes('not-found')) return 'Requested data was not found.';
         if (code.includes('network-request-failed')) return 'Network error. Check your connection.';
     }
-    // Fallback to err.message when available
     return err.message || String(err);
 }
 
 function setLoading(state) {
     isLoading = state;
     if (state) {
-        // simple inline loader — keeps UX improvements minimal and self-contained
-        cropContainer.innerHTML = '<div class="loader" aria-busy="true" style="grid-column:1/-1;padding:2rem;text-align:center;">Loading listings...</div>';
+        // Uses the CSS .loader class added in the CSS file
+        cropContainer.innerHTML = '<div class="loader" aria-busy="true"></div>';
         resultCountEl.textContent = 'Loading...';
     }
 }
@@ -188,25 +193,29 @@ function renderListings(listings, append = false) {
         return;
     }
 
-    resultCountEl.textContent = `${listings.length} listing${listings.length !== 1 ? 's' : ''}`;
+    // Fix: Keep a running total if appending
+    const currentCount = append ? cropContainer.children.length : 0;
+    resultCountEl.textContent = `${currentCount + listings.length} listing${(currentCount + listings.length) !== 1 ? 's' : ''}`;
 
     listings.forEach((item) => {
         const card = document.createElement('div');
-        card.className = 'card';
+        card.className = 'card float-in';
+        
+        // SECURITY FIX: Wrapped all dynamic user data in escapeHtml()
         card.innerHTML = `
-            <img src="${item.image_url || FALLBACK_IMAGE}" alt="${item.name}" class="card-img" onerror="this.src='${FALLBACK_IMAGE}'">
+            <img src="${escapeHtml(item.image_url || FALLBACK_IMAGE)}" alt="${escapeHtml(item.name)}" class="card-img" onerror="this.src='${FALLBACK_IMAGE}'">
             <div class="card-content">
                 <div class="badge-row">
-                    ${item.location ? `<span class="badge badge-location"><i class="fa-solid fa-location-dot"></i> ${item.location}</span>` : ''}
-                    ${item.category ? `<span class="badge badge-category">${item.category}</span>` : ''}
+                    ${item.location ? `<span class="badge badge-location"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(item.location)}</span>` : ''}
+                    ${item.category ? `<span class="badge badge-category">${escapeHtml(item.category)}</span>` : ''}
                 </div>
-                <h3 class="card-title">${item.name}</h3>
+                <h3 class="card-title">${escapeHtml(item.name)}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
                 <div class="card-meta">
-                    ${item.farmer_name ? `<p><i class="fa-solid fa-user"></i> ${item.farmer_name}</p>` : ''}
-                    ${item.phone ? `<p><i class="fa-solid fa-phone"></i> <a href="tel:${item.phone}">${item.phone}</a></p>` : ''}
+                    ${item.farmer_name ? `<p><i class="fa-solid fa-user"></i> ${escapeHtml(item.farmer_name)}</p>` : ''}
+                    ${item.phone ? `<p><i class="fa-solid fa-phone"></i> <a href="tel:${escapeHtml(item.phone)}">${escapeHtml(item.phone)}</a></p>` : ''}
                 </div>
-                ${item.phone ? `<button class="btn-contact" onclick="window.location.href='tel:${item.phone}'"><i class="fa-solid fa-phone"></i> Contact Farmer</button>` : ''}
+                ${item.phone ? `<button class="btn-contact" onclick="window.location.href='tel:${escapeHtml(item.phone)}'"><i class="fa-solid fa-phone"></i> Contact Farmer</button>` : ''}
             </div>
         `;
         cropContainer.appendChild(card);
@@ -214,9 +223,10 @@ function renderListings(listings, append = false) {
 }
 
 function renderPaginationControls(hasMore = false) {
-    // Remove old controls
     const old = document.getElementById('paginationControls');
     if (old) old.remove();
+
+    if (!hasMore) return; // Don't show button if there's no more data
 
     const wrapper = document.createElement('div');
     wrapper.id = 'paginationControls';
@@ -226,9 +236,9 @@ function renderPaginationControls(hasMore = false) {
     wrapper.style.marginTop = '1rem';
 
     const loadMore = document.createElement('button');
+    loadMore.id = 'loadMoreBtn'; // Added ID for easy targeting
     loadMore.className = 'btn-outline';
     loadMore.textContent = 'Load more';
-    loadMore.disabled = !hasMore;
     loadMore.addEventListener('click', async () => {
         await loadMoreCrops();
     });
@@ -237,7 +247,6 @@ function renderPaginationControls(hasMore = false) {
     cropContainer.parentNode.appendChild(wrapper);
 }
 
-// Server-side Firestore fetch with pagination. Supports location filter and prefix-search on name_lower
 async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page = 1, pageSizeLocal = pageSize, startAfterDoc = null } = {}) {
     const db = window.firebaseDb;
     const { collection, getDocs, query, where, orderBy, limit, startAfter } = window.dbFns;
@@ -246,28 +255,22 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
         const cropsCol = collection(db, 'crops');
         let q = null;
 
-        // Build query parts
         const constraints = [];
 
         if (location && location !== 'All') {
             constraints.push(where('location', '==', location));
         }
 
-        // For server-side search we attempt a prefix search on a lowercase field 'name_lower'.
-        // This requires that documents include a 'name_lower' string field.
         const normalizedSearch = (searchTerm || '').trim().toLowerCase();
         if (normalizedSearch) {
-            // Firestore prefix range trick
             const end = normalizedSearch + '\\uf8ff';
             constraints.push(where('name_lower', '>=', normalizedSearch));
             constraints.push(where('name_lower', '<=', end));
         }
 
-        // If constraints are present, compose a query. We'll order by name_lower if searching, otherwise by created_at or name.
         if (normalizedSearch) {
             constraints.push(orderBy('name_lower'));
         } else {
-            // If collection has a created_at field, that would be better. Fallback to name ordering.
             try {
                 constraints.push(orderBy('created_at', 'desc'));
             } catch (e) {
@@ -275,7 +278,6 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
             }
         }
 
-        // Pagination
         constraints.push(limit(pageSizeLocal));
         if (startAfterDoc) {
             constraints.push(startAfter(startAfterDoc));
@@ -286,18 +288,14 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
         const snap = await getDocs(q);
         const docs = snap.docs.map((d) => ({ id: d.id, ...d.data(), _snap: d }));
         const hasMore = docs.length === pageSizeLocal;
-        // Save lastVisible for next page
         lastVisible = docs.length ? docs[docs.length - 1]._snap : null;
 
-        // Strip _snap before returning
         const clean = docs.map(({ _snap, ...rest }) => rest);
         return { data: clean, hasMore };
     } catch (err) {
-        // If the server-side search failed because documents lack 'name_lower', fallback to a simple unfiltered read
         const msg = String(err && err.message ? err.message : err);
         if (msg.includes('Field') || msg.includes('name_lower') || msg.includes('invalid-argument')) {
             console.warn('Prefix search failed, falling back to client-side search. Error:', err);
-            // get all (or location-filtered) docs then filter client-side
             try {
                 const cropsCol = collection(db, 'crops');
                 let q2 = null;
@@ -305,7 +303,6 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
                 if (location && location !== 'All') parts.push(where('location', '==', location));
                 parts.push(limit(pageSizeLocal));
                 if (startAfterDoc) parts.push(startAfter(startAfterDoc));
-                // Order by name for consistent results
                 parts.push(orderBy('name'));
                 q2 = query(cropsCol, ...parts);
                 const snap = await getDocs(q2);
@@ -314,11 +311,11 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
                 const clean = docs.map(({ _snap, ...rest }) => rest);
                 return { data: clean, hasMore: clean.length === pageSizeLocal };
             } catch (err2) {
-                throw err2; // let outer handler map error
+                throw err2; 
             }
         }
 
-        throw err; // rethrow for outer handler
+        throw err; 
     }
 }
 
@@ -343,21 +340,30 @@ async function loadMoreCrops() {
         triggerToast('No more listings');
         return;
     }
-    setLoading(true);
+
+    // BUG FIX: Instead of wiping the grid with setLoading(true), we target the button directly
+    const btn = document.getElementById('loadMoreBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Loading...';
+    }
+
     try {
         const { data, hasMore } = await fetchCropsFromFirestore({ searchTerm: currentQueryOptions.searchTerm, location: currentQueryOptions.location, pageSizeLocal: pageSize, startAfterDoc: lastVisible });
-        setLoading(false);
+        
         if (data && data.length) renderListings(data, true);
-        renderPaginationControls(hasMore);
+        renderPaginationControls(hasMore); // This removes old button and creates new one with updated state
     } catch (err) {
-        setLoading(false);
         console.error('Failed to load more crops', err);
         triggerToast(mapFirebaseError(err));
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Load more'; // Reset button text on error
+        }
     }
 }
 
 async function applyFilters() {
-    // Called when user submits search/filter. Reset pagination and load from server with filters
     const searchTerm = document.getElementById('searchInput').value.trim();
     const location   = document.getElementById('locationFilter').value;
     currentQueryOptions = { searchTerm, location };
@@ -381,12 +387,12 @@ async function initApp() {
     // Auth state observer
     onAuthStateChanged(auth, async (user) => {
         if (user) {
-            // User is signed in
             landingPage.style.display = 'none';
+            document.getElementById('staticPageContainer').style.display = 'none';
             dashboardApp.style.display = 'block';
 
             navMenu.innerHTML = `
-                <span class="nav-link"><i class="fa-solid fa-user-check"></i> ${user.email}</span>
+                <span class="nav-link"><i class="fa-solid fa-user-check"></i> ${escapeHtml(user.email)}</span>
                 <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
             `;
             document.getElementById('navLogoutBtn').addEventListener('click', async () => {
@@ -399,10 +405,8 @@ async function initApp() {
                 }
             });
 
-            // Load initial crops for signed-in user
             await loadInitialCrops();
         } else {
-            // No user
             landingPage.style.display = 'block';
             dashboardApp.style.display = 'none';
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
@@ -419,13 +423,11 @@ async function initApp() {
 
         try {
             const cred = await createUserWithEmailAndPassword(auth, email, password);
-            // Save user profile...
+            
+            // CLEANUP FIX: Removed manual hiding/showing of pages. 
+            // onAuthStateChanged triggers instantly on createUserWithEmailAndPassword and handles the UI switch seamlessly.
 
-            landingPage.style.display = "none";
-            dashboardApp.style.display = "block";
-            await loadInitialCrops();
             const uid = cred.user.uid;
-            // create a user profile document
             try {
                 await setDoc(doc(db, 'users', uid), { full_name: name, email, created_at: new Date().toISOString() });
             } catch (err) {
@@ -448,17 +450,18 @@ async function initApp() {
 
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            landingPage.style.display = "none";
-            dashboardApp.style.display = "block";
-            await loadInitialCrops();
+            
+            // CLEANUP FIX: Removed manual hiding/showing of pages.
+            
             closeModal();
+            triggerToast('Welcome back!');
         } catch (err) {
             console.error('Sign in failed', err);
             triggerToast(mapFirebaseError(err));
         }
     });
 
-    // Password reset (send reset email)
+    // Password reset
     resetForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('resetEmail').value;
@@ -501,14 +504,13 @@ async function initApp() {
         });
     }
 
-    // Smooth-scroll in-page nav links (Home/About/Services/How It Works/Contact)
+    // Smooth-scroll in-page nav links
     document.querySelectorAll('.nav-page-link').forEach((link) => {
         link.addEventListener('click', (e) => {
             const href = link.getAttribute('href') || '';
             if (href.startsWith('#')) {
                 e.preventDefault();
                 const targetId = href.slice(1);
-                // If a static page is currently showing, return to the dashboard/landing first
                 if (document.getElementById('staticPageContainer').style.display !== 'none') {
                     showDashboard();
                 }
@@ -521,7 +523,7 @@ async function initApp() {
         });
     });
 
-    // Contact form (client-side only — no backend endpoint configured)
+    // Contact form
     const contactForm = document.getElementById('contactForm');
     if (contactForm) {
         contactForm.addEventListener('submit', (e) => {
@@ -530,8 +532,6 @@ async function initApp() {
             contactForm.reset();
         });
     }
-
-    // Load initial UI state: we rely on onAuthStateChanged to set the proper view
 }
 
 // Initialize app when DOM is ready
