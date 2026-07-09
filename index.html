@@ -1151,9 +1151,9 @@
                 <div class="footer-logo"><i class="fa-solid fa-leaf"></i> AgriMarket SL</div>
                 <p>Empowering Sierra Leone's farmers with real-time market access, transparent pricing, and direct buyer connections.</p>
                 <div class="footer-social">
-                    <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
-                    <a href="#" aria-label="Twitter"><i class="fa-brands fa-x-twitter"></i></a>
-                    <a href="#" aria-label="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
+                    <a href="https://facebook.com/agrimarketsl" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
+                    <a href="https://twitter.com/agrimarketsl" target="_blank" rel="noopener noreferrer" aria-label="Twitter"><i class="fa-brands fa-x-twitter"></i></a>
+                    <a href="https://wa.me/23276000000" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
                     <a href="mailto:support@agrimarketsl.com" aria-label="Email"><i class="fa-solid fa-envelope"></i></a>
                 </div>
             </div>
@@ -1308,8 +1308,19 @@
         }, { threshold: 0.5 });
         statEls.forEach(el => counterObserver.observe(el));
 
-        // Open auth modal directly on the Register (Create Account) tab
-        function openRegisterModal() {
+        // ===== AUTH MODAL OPENERS (Get Started / Sign In) =====
+        // Opens the auth modal directly on a given tab: 'register' or 'login'.
+        // Prefers app.js's own openModal() (keeps state fully in sync with the
+        // rest of the auth flow); falls back to a manual version if app.js
+        // hasn't finished loading yet for any reason.
+        function openAuthModal(tab) {
+            tab = tab || 'register';
+
+            if (typeof window.openModal === 'function') {
+                window.openModal(tab);
+                return;
+            }
+
             const modal = document.getElementById('authModal');
             const tabRegister = document.getElementById('tabRegister');
             const tabLogin = document.getElementById('tabLogin');
@@ -1317,13 +1328,30 @@
             const loginForm = document.getElementById('loginForm');
             const resetForm = document.getElementById('resetForm');
 
-            modal.style.display = 'flex';
-            tabRegister.classList.add('active');
-            tabLogin.classList.remove('active');
-            registerForm.classList.add('active');
-            loginForm.classList.remove('active');
+            modal.classList.add('active');
+            tabRegister.classList.toggle('active', tab === 'register');
+            tabLogin.classList.toggle('active', tab === 'login');
+            registerForm.classList.toggle('active', tab === 'register');
+            loginForm.classList.toggle('active', tab === 'login');
             resetForm.classList.remove('active');
         }
+
+        // Open the auth modal directly on the Register (Create Account) tab —
+        // used by the "Get Started Free" CTA button so a click takes the
+        // visitor straight to account creation.
+        function openRegisterModal() {
+            openAuthModal('register');
+        }
+
+        // Open the auth modal directly on the Sign In tab, available for any
+        // "Sign In" style entry points.
+        function openLoginModal() {
+            openAuthModal('login');
+        }
+
+        window.openAuthModal = openAuthModal;
+        window.openRegisterModal = openRegisterModal;
+        window.openLoginModal = openLoginModal;
 
         // ===== STATIC PAGE SYSTEM (Working Footer Links) =====
         // Page content templates
