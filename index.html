@@ -1236,8 +1236,6 @@
             </div>
         </div>
 
-        <div id="notificationList" class="notification-list container" aria-live="polite"></div>
-
         <main class="container float-in" style="animation-delay: 0.3s;">
             <section class="listings">
                 <div class="section-header">
@@ -1721,7 +1719,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB4mHBxFdDDhIZCcFcpBqQXdBc2NgkMwxw",
@@ -1758,7 +1756,8 @@
     startAfter,
     doc,
     setDoc,
-    getDoc
+    getDoc,
+    writeBatch
   };
 
   window.testFirestore = async function () {
