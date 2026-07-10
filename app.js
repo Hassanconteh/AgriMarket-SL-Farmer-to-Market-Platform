@@ -375,6 +375,116 @@ async function loadMoreCrops() {
     }
 }
 
+// ===== Dashboard notifications =====
+// A small dismissible announcement bar shown right after login, sourced
+// from a public 'notifications' Firestore collection so you can publish
+// updates (price alerts, maintenance notices, etc.) without a code deploy.
+// Dismissed notifications are remembered per-browser (localStorage) so they
+// don't reappear once closed, but nothing is deleted from Firestore — other
+// users, or the same user on another device, will still see them.
+// NOTE: like blog posts, this requires a Firestore rule allowing reads,
+// e.g. match /notifications/{id} { allow read: if true; }
+
+const NOTIFICATION_DISMISS_KEY = 'agrimarket_dismissed_notifications';
+const MAX_VISIBLE_NOTIFICATIONS = 3;
+const notificationList = document.getElementById('notificationList');
+const NOTIFICATION_ICONS = {
+    info: 'fa-circle-info',
+    success: 'fa-circle-check',
+    warning: 'fa-triangle-exclamation',
+    urgent: 'fa-bell'
+};
+
+function getDismissedNotificationIds() {
+    try {
+        return new Set(JSON.parse(localStorage.getItem(NOTIFICATION_DISMISS_KEY) || '[]'));
+    } catch {
+        return new Set();
+    }
+}
+
+function dismissNotification(id) {
+    const dismissed = getDismissedNotificationIds();
+    dismissed.add(id);
+    try {
+        localStorage.setItem(NOTIFICATION_DISMISS_KEY, JSON.stringify([...dismissed]));
+    } catch (err) {
+        console.warn('Could not persist dismissed notification', err);
+    }
+}
+
+// Only allow http(s) links for the optional CTA button — escaping protects
+// against injected markup, but not against a javascript: URL scheme, which
+// needs its own check.
+function isSafeUrl(url) {
+    try {
+        const parsed = new URL(url, window.location.origin);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+function buildNotificationEl(n) {
+    const type = ['info', 'success', 'warning', 'urgent'].includes(n.type) ? n.type : 'info';
+    const title    = escapeHtml(n.title || '');
+    const message  = escapeHtml(n.message || '');
+    const linkUrl  = n.link_url && isSafeUrl(n.link_url) ? escapeHtml(n.link_url) : '';
+    const linkText = escapeHtml(n.link_text || 'Learn more');
+
+    const el = document.createElement('div');
+    el.className = `notification-item notification-${type}`;
+    el.innerHTML = `
+        <i class="fa-solid ${NOTIFICATION_ICONS[type]} notification-icon"></i>
+        <div class="notification-body">
+            ${title ? `<strong>${title}</strong>` : ''}
+            ${message ? `<span>${message}</span>` : ''}
+            ${linkUrl ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="notification-link">${linkText} <i class="fa-solid fa-arrow-right"></i></a>` : ''}
+        </div>
+        <button type="button" class="notification-dismiss" aria-label="Dismiss notification"><i class="fa-solid fa-xmark"></i></button>
+    `;
+    el.querySelector('.notification-dismiss').addEventListener('click', () => {
+        dismissNotification(n.id);
+        el.remove();
+    });
+    return el;
+}
+
+async function loadNotifications() {
+    if (!notificationList) return;
+    const { collection, getDocs, query, orderBy, limit } = window.dbFns;
+    const db = window.firebaseDb;
+
+    try {
+        const notifCol = collection(db, 'notifications');
+        // Single orderBy only (no `where`) so this never needs a composite
+        // index — 'active' and 'expires_at' are filtered client-side below,
+        // same approach used for blog posts.
+        const q = query(notifCol, orderBy('created_at', 'desc'), limit(10));
+        const snap = await getDocs(q);
+
+        const dismissed = getDismissedNotificationIds();
+        const now = Date.now();
+
+        const visible = snap.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((n) => n.active !== false)
+            .filter((n) => {
+                if (!n.expires_at) return true;
+                const expires = typeof n.expires_at?.toDate === 'function' ? n.expires_at.toDate() : new Date(n.expires_at);
+                return isNaN(expires.getTime()) || expires.getTime() > now;
+            })
+            .filter((n) => !dismissed.has(n.id))
+            .slice(0, MAX_VISIBLE_NOTIFICATIONS);
+
+        notificationList.innerHTML = '';
+        visible.forEach((n) => notificationList.appendChild(buildNotificationEl(n)));
+    } catch (err) {
+        // Fail quietly — a broken notification feed shouldn't block the dashboard.
+        console.error('Failed to load notifications', err);
+    }
+}
+
 // ===== Blog =====
 // Public marketing content, read from a 'posts' Firestore collection — not
 // gated behind sign-in, since it's meant to be visible on the landing page.
@@ -552,12 +662,14 @@ async function initApp() {
 
             await renderAuthedNav(user);
 
-            // Load initial crops for signed-in user
+            // Load initial crops and the notification bar for signed-in user
             await loadInitialCrops();
+            loadNotifications();
         } else {
             // No user
             landingPage.style.display = 'block';
             dashboardApp.style.display = 'none';
+            if (notificationList) notificationList.innerHTML = '';
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
             document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
         }
