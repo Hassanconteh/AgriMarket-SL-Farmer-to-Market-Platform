@@ -178,6 +178,53 @@ button { font-family: 'Inter', sans-serif; }
 .toast { background: var(--text-main); color: white; padding: 1rem 1.5rem; border-radius: 8px; margin-top: 10px; animation: floatUp 0.3s ease forwards; max-width: 360px; pointer-events: auto; }
 
 .footer { background-color: #ffffff; border-top: 1px solid var(--border); padding: 2rem 0; margin-top: 4rem; color: var(--text-muted); font-size: 0.9rem; }
+
+.notification-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-top: 1.5rem;
+}
+
+.notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--sl-blue);
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    animation: floatUp 0.4s ease forwards;
+}
+
+.notification-icon { font-size: 1.1rem; margin-top: 0.15rem; flex-shrink: 0; color: var(--sl-blue); }
+.notification-info    { border-left-color: var(--sl-blue); }
+.notification-success { border-left-color: var(--sl-green); }
+.notification-success .notification-icon { color: var(--sl-green); }
+.notification-warning { border-left-color: #d97706; }
+.notification-warning .notification-icon { color: #d97706; }
+.notification-urgent  { border-left-color: #dc2626; }
+.notification-urgent  .notification-icon { color: #dc2626; }
+
+.notification-body { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; font-size: 0.9rem; color: var(--text-main); }
+.notification-body strong { font-size: 0.95rem; }
+.notification-link { color: var(--sl-blue); font-weight: 600; text-decoration: none; font-size: 0.85rem; margin-top: 0.2rem; display: inline-flex; align-items: center; gap: 0.3rem; }
+.notification-link:hover { text-decoration: underline; }
+
+.notification-dismiss {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 0.2rem;
+    flex-shrink: 0;
+    border-radius: 4px;
+    transition: 0.2s;
+}
+.notification-dismiss:hover { color: var(--text-main); background: var(--bg-page); }
 .footer-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
 .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
 .footer-links a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
