@@ -743,7 +743,7 @@
 
         <!-- Desktop nav links (landing only) -->
         <nav id="landingNav" class="nav-links" aria-label="Main">
-            <a href="#hero" class="active">Home</a>
+            <a href="#landingPage" class="active">Home</a>
             <a href="#about">About</a>
             <a href="#services">Services</a>
             <a href="#how-it-works">How It Works</a>
@@ -759,7 +759,7 @@
 
         <!-- Mobile menu -->
         <div class="mobile-menu" id="mobileMenu">
-            <a href="#hero">Home</a>
+            <a href="#landingPage">Home</a>
             <a href="#about">About</a>
             <a href="#services">Services</a>
             <a href="#how-it-works">How It Works</a>
@@ -1162,7 +1162,7 @@
             <div class="footer-col">
                 <h4>Quick Links</h4>
                 <ul>
-                    <li><a href="#hero"><i class="fa-solid fa-chevron-right"></i> Home</a></li>
+                    <li><a href="#landingPage"><i class="fa-solid fa-chevron-right"></i> Home</a></li>
                     <li><a href="#about"><i class="fa-solid fa-chevron-right"></i> About Us</a></li>
                     <li><a href="#services"><i class="fa-solid fa-chevron-right"></i> Services</a></li>
                     <li><a href="#how-it-works"><i class="fa-solid fa-chevron-right"></i> How It Works</a></li>
@@ -1452,6 +1452,7 @@
         window.showPage = function(page) {
             const container = document.getElementById('staticPageContainer');
             const content = document.getElementById('staticContent');
+            const dashboard = document.getElementById('dashboardApp');
 
             if (pageContents[page]) {
                 content.innerHTML = pageContents[page];
@@ -1459,32 +1460,35 @@
                 content.innerHTML = '<h2>Page Not Found</h2><p>The requested page could not be found. <a href="#" onclick="goBackFromStatic(); return false;">Go back</a></p>';
             }
 
+            // Remember whether the dashboard (logged-in view) or the landing
+            // page was showing *before* we navigate away — we're about to
+            // hide dashboardApp too, so without this the Back button can no
+            // longer tell the two apart and always falls back to the landing
+            // page, even for a logged-in user.
+            container.dataset.previousView = (dashboard.style.display !== 'none') ? 'dashboard' : 'landing';
+
             // Hide landing and dashboard
             document.getElementById('landingPage').style.display = 'none';
             document.getElementById('landingSections').style.display = 'none';
-            document.getElementById('dashboardApp').style.display = 'none';
+            dashboard.style.display = 'none';
 
             // Show static page
             container.style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
 
-        // Smart "Back" button — returns to landing or dashboard depending on auth state
+        // Smart "Back" button — returns to whichever view (landing or
+        // dashboard) was active before showPage() navigated away from it.
         function goBackFromStatic() {
             const container = document.getElementById('staticPageContainer');
             container.style.display = 'none';
 
-            // Check if user is authenticated by seeing if dashboard is populated
             const dashboard = document.getElementById('dashboardApp');
             const landing = document.getElementById('landingPage');
 
-            // If dashboard has content visible state (set by app.js auth), return there
-            // Otherwise return to landing
-            if (dashboard.style.display !== 'none') {
-                // Dashboard was active — return to it
+            if (container.dataset.previousView === 'dashboard') {
                 dashboard.style.display = 'block';
             } else {
-                // Return to landing page
                 landing.style.display = '';
                 document.getElementById('landingSections').style.display = 'block';
             }
@@ -1494,37 +1498,39 @@
         // Wire up the back button
         document.getElementById('backFromStatic').addEventListener('click', goBackFromStatic);
 
-        // Also make footer Quick Links scroll to sections when on landing,
-        // or navigate properly when on dashboard or static page
+        // Footer Quick Links / Services links point at marketing sections
+        // that live on the landing page (About, Services, How It Works,
+        // etc.). If the dashboard is currently showing, those sections are
+        // hidden behind it, so we switch back to the landing page first,
+        // then scroll — otherwise the click does nothing, which was the bug.
         document.querySelectorAll('.site-footer .footer-col a[href^="#"]').forEach(link => {
             link.addEventListener('click', function(e) {
                 const href = this.getAttribute('href');
                 const targetId = href.substring(1);
                 const targetEl = document.getElementById(targetId);
 
-                if (targetEl) {
-                    // If static page is open, close it first
-                    const staticContainer = document.getElementById('staticPageContainer');
-                    if (staticContainer.style.display !== 'none') {
-                        staticContainer.style.display = 'none';
-                        document.getElementById('landingPage').style.display = '';
-                        document.getElementById('landingSections').style.display = 'block';
-                    }
+                if (!targetEl) return; // no matching section — let default anchor behavior happen
+                e.preventDefault();
 
-                    // If dashboard is open, we can still scroll but the sections won't be visible
-                    // So switch back to landing
-                    const dashboard = document.getElementById('dashboardApp');
-                    if (dashboard.style.display !== 'none') {
-                        // User is logged in — just scroll within dashboard context
-                        // (landing sections are hidden, so let it be)
-                        return;
-                    }
-
-                    // Small delay to let display changes render
-                    setTimeout(() => {
-                        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }, 100);
+                // If a static page (Privacy/Terms/etc.) is open, close it first.
+                const staticContainer = document.getElementById('staticPageContainer');
+                if (staticContainer.style.display !== 'none') {
+                    staticContainer.style.display = 'none';
                 }
+
+                // If the dashboard is open, switch to the landing page so the
+                // target section is actually visible to scroll to.
+                const dashboard = document.getElementById('dashboardApp');
+                if (dashboard.style.display !== 'none') {
+                    dashboard.style.display = 'none';
+                }
+                document.getElementById('landingPage').style.display = '';
+                document.getElementById('landingSections').style.display = 'block';
+
+                // Small delay to let display changes render
+                setTimeout(() => {
+                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
             });
         });
     </script>
@@ -1534,7 +1540,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1559,7 +1565,8 @@
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     signOut,
-    sendPasswordResetEmail
+    sendPasswordResetEmail,
+    updateProfile
   };
   window.dbFns = {
     collection,
