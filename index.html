@@ -1257,6 +1257,10 @@
             </div>
 
             <form id="loginForm" class="auth-form active">
+                <button type="button" id="googleSignInBtn" class="btn-full btn-google">
+        <i class="fa-brands fa-google"></i> Continue with Google
+                </button>
+<div class="auth-divider"><span>or sign in with email</span></div>
                 <div class="form-group">
                     <label for="loginEmail">Email Address</label>
                     <input type="email" id="loginEmail" autocomplete="email" placeholder="e.g., trader@freetown.sl" required>
@@ -1272,6 +1276,10 @@
             </form>
 
             <form id="registerForm" class="auth-form">
+                <button type="button" id="googleSignUpBtn" class="btn-full btn-google">
+    <i class="fa-brands fa-google"></i> Continue with Google
+</button>
+<div class="auth-divider"><span>or create account with email</span></div>
                 <div class="form-group">
                     <label for="regName">Full Name</label>
                     <input type="text" id="regName" autocomplete="name" placeholder="e.g. Hassan Conteh" required>
@@ -1718,7 +1726,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1734,6 +1742,8 @@
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
+  const googleProvider = new GoogleAuthProvider();
+window.googleProvider = googleProvider;
   const db = getFirestore(app);
 
   window.firebaseAuth = auth;
@@ -1744,7 +1754,9 @@
     createUserWithEmailAndPassword,
     signOut,
     sendPasswordResetEmail,
-    updateProfile
+    updateProfile,
+    GoogleAuthProvider,
+    signInWithPopup
   };
   window.dbFns = {
     collection,
