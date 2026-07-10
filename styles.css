@@ -144,6 +144,38 @@ button { font-family: 'Inter', sans-serif; }
     transition: transform 0.3s ease, background 0.3s ease;
 }
 
+.btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    background: white;
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    padding: 0.8rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.btn-google:hover { background: var(--bg-page); border-color: var(--sl-blue); }
+.btn-google i { color: #ea4335; font-size: 1.05rem; }
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin: 1.1rem 0;
+}
+.auth-divider::before, .auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border);
+}
+.auth-divider span { padding: 0 0.75rem; }
+
 .card:hover {
     background: rgba(255, 255, 255, 0.7);
     transform: translateY(-5px);
