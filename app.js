@@ -156,6 +156,9 @@ function mapFirebaseError(err) {
         if (code.includes('auth/user-not-found')) return 'No account found for that email.';
         if (code.includes('auth/weak-password')) return 'Password is too weak (minimum 6 characters).';
         if (code.includes('auth/too-many-requests')) return 'Too many attempts. Try again later.';
+        if (code.includes('auth/popup-closed-by-user')) return 'Sign-in was cancelled.';
+        if (code.includes('auth/cancelled-popup-request')) return 'Sign-in was cancelled.';
+        if (code.includes('auth/account-exists-with-different-credential')) return 'This email is already registered using a different sign-in method. Try signing in with email/password instead.';
         if (code.includes('permission-denied')) return 'Access denied. You do not have permission to view this data.';
         if (code.includes('not-found')) return 'Requested data was not found.';
         if (code.includes('network-request-failed')) return 'Network error. Check your connection.';
@@ -712,6 +715,52 @@ async function applyFilters() {
     await loadInitialCrops();
 }
 
+// ===== Google Sign-In =====
+// Shared handler for both the "Continue with Google" button on the Sign In
+// tab and the one on the Create Account tab — Google auth doesn't
+// distinguish between signing up and signing in, Firebase just creates the
+// account on first use. On first sign-in we also create a 'users' profile
+// doc, mirroring what the email/password registration flow writes, so
+// getFirstName() and any other code that reads users/{uid} keeps working
+// the same way regardless of which sign-in method someone used.
+async function signInWithGoogleHandler(auth, db) {
+    try {
+        const { signInWithPopup } = window.authFns;
+        const { doc, getDoc, setDoc } = window.dbFns;
+        const provider = window.googleProvider;
+
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+
+        try {
+            const profileRef = doc(db, 'users', user.uid);
+            const snap = await getDoc(profileRef);
+            if (!snap.exists()) {
+                await setDoc(profileRef, {
+                    full_name: user.displayName || '',
+                    email: user.email || '',
+                    created_at: new Date().toISOString()
+                });
+            }
+        } catch (err) {
+            console.warn('Failed to write/check user profile for Google sign-in', err);
+        }
+
+        landingPage.style.display = "none";
+        dashboardApp.style.display = "block";
+        await loadInitialCrops();
+        closeModal();
+    } catch (err) {
+        // A user closing the Google popup shouldn't be logged as a hard
+        // error — it's a normal, expected outcome.
+        if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+            return;
+        }
+        console.error('Google sign-in failed', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
 async function initApp() {
     try {
         await waitForFirebase();
@@ -860,6 +909,11 @@ async function initApp() {
             triggerToast(mapFirebaseError(err));
         }
     });
+
+    // Google Sign-In — same handler wired to both the Sign In tab's button
+    // and the Create Account tab's button.
+    document.getElementById('googleSignInBtn')?.addEventListener('click', () => signInWithGoogleHandler(auth, db));
+    document.getElementById('googleSignUpBtn')?.addEventListener('click', () => signInWithGoogleHandler(auth, db));
 
     // Password reset (send reset email)
     resetForm.addEventListener('submit', async (e) => {
