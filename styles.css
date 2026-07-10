@@ -57,7 +57,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .navbar .logo { font-size: 1.4rem; font-weight: 700; color: var(--sl-green); }
+
+/* #navMenu had no layout rule at all — its children (bell, buttons, name)
+   were falling back to block/inline defaults instead of sitting in a row,
+   which is what threw off the notification dropdown's positioning. */
+#navMenu { display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; }
+
 .nav-link { color: var(--text-muted); text-decoration: none; margin: 0 1.5rem; font-weight: 600; transition: color 0.2s; }
+#navMenu .nav-link { margin: 0; } /* spacing here comes from #navMenu's gap instead */
 .nav-link:hover { color: var(--sl-blue); }
 
 button { font-family: 'Inter', sans-serif; }
@@ -179,52 +186,140 @@ button { font-family: 'Inter', sans-serif; }
 
 .footer { background-color: #ffffff; border-top: 1px solid var(--border); padding: 2rem 0; margin-top: 4rem; color: var(--text-muted); font-size: 0.9rem; }
 
-.notification-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding-top: 1.5rem;
-}
+/* Notification bell + dropdown — lives in the sticky navbar, so it's always
+   reachable regardless of scroll position while on the dashboard. */
+.notif-wrapper { position: relative; }
 
-.notification-item {
+.notif-bell-btn {
+    position: relative;
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 1.05rem;
+    color: var(--text-muted);
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    transition: 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.notif-bell-btn:hover { color: var(--sl-blue); border-color: var(--sl-blue); background: #eff6ff; }
+
+.notif-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #dc2626;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
     display: flex;
-    align-items: flex-start;
-    gap: 0.85rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    line-height: 1;
+    border: 2px solid var(--bg-card);
+}
+.notif-badge[hidden] { display: none; }
+
+.notif-dropdown {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: 0;
+    width: 360px;
+    max-width: min(92vw, 360px);
+    max-height: 440px;
+    overflow-x: hidden;
+    overflow-y: auto;
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-left: 4px solid var(--sl-blue);
-    border-radius: 10px;
-    padding: 0.9rem 1.1rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    animation: floatUp 0.4s ease forwards;
+    border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+    z-index: 300;
 }
+.notif-dropdown[hidden] { display: none; }
 
-.notification-icon { font-size: 1.1rem; margin-top: 0.15rem; flex-shrink: 0; color: var(--sl-blue); }
-.notification-info    { border-left-color: var(--sl-blue); }
-.notification-success { border-left-color: var(--sl-green); }
-.notification-success .notification-icon { color: var(--sl-green); }
-.notification-warning { border-left-color: #d97706; }
-.notification-warning .notification-icon { color: #d97706; }
-.notification-urgent  { border-left-color: #dc2626; }
-.notification-urgent  .notification-icon { color: #dc2626; }
+.notif-dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--text-main);
+    position: sticky;
+    top: 0;
+    background: var(--bg-card);
+}
+.notif-mark-all { background: none; border: none; color: var(--sl-blue); font-size: 0.78rem; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.notif-mark-all:hover { text-decoration: underline; }
 
-.notification-body { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; font-size: 0.9rem; color: var(--text-main); }
-.notification-body strong { font-size: 0.95rem; }
-.notification-link { color: var(--sl-blue); font-weight: 600; text-decoration: none; font-size: 0.85rem; margin-top: 0.2rem; display: inline-flex; align-items: center; gap: 0.3rem; }
-.notification-link:hover { text-decoration: underline; }
+.notif-dropdown-list { display: flex; flex-direction: column; }
+.notif-dropdown-empty { padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
 
-.notification-dismiss {
-    background: none;
-    border: none;
-    color: var(--text-muted);
+.notif-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.95rem 1.1rem;
+    border-bottom: 1px solid var(--border);
     cursor: pointer;
-    font-size: 0.95rem;
-    padding: 0.2rem;
-    flex-shrink: 0;
-    border-radius: 4px;
-    transition: 0.2s;
+    transition: background 0.15s;
+    width: 100%;
+    box-sizing: border-box;
 }
-.notification-dismiss:hover { color: var(--text-main); background: var(--bg-page); }
+.notif-row:last-child { border-bottom: none; }
+.notif-row:hover { background: var(--bg-page); }
+.notif-row.unread { background: #eff6ff; }
+
+.notif-row-icon-wrap {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+}
+.notif-icon-info    { background: #e0f2fe; color: var(--sl-blue); }
+.notif-icon-success { background: #dcfce7; color: var(--sl-green-dark); }
+.notif-icon-warning { background: #fef3c7; color: #b45309; }
+.notif-icon-urgent  { background: #fee2e2; color: #b91c1c; }
+
+.notif-row-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.notif-row-title {
+    font-size: 0.87rem;
+    font-weight: 600;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    overflow-wrap: anywhere;
+}
+.notif-row-message { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem; line-height: 1.5; overflow-wrap: anywhere; }
+.notif-row-date { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem; }
+.notif-row-link { font-size: 0.78rem; font-weight: 600; color: var(--sl-blue); text-decoration: none; margin-top: 0.4rem; display: inline-flex; align-items: center; gap: 0.3rem; overflow-wrap: anywhere; }
+.notif-row-link:hover { text-decoration: underline; }
+.notif-unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sl-blue); flex-shrink: 0; }
+
+@media (max-width: 480px) {
+    .notif-dropdown { position: fixed; top: var(--navbar-height); right: 0.5rem; left: 0.5rem; width: auto; max-width: none; }
+}
 .footer-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
 .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
 .footer-links a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
