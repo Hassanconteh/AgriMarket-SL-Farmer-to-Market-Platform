@@ -501,12 +501,12 @@ function renderNotificationDropdown() {
         const row = document.createElement('div');
         row.className = `notif-row${isUnread ? ' unread' : ''}`;
         row.innerHTML = `
-            <i class="fa-solid ${NOTIFICATION_ICONS[type]} notif-row-icon notif-icon-${type}"></i>
+            <div class="notif-row-icon-wrap notif-icon-${type}"><i class="fa-solid ${NOTIFICATION_ICONS[type]}"></i></div>
             <div class="notif-row-body">
                 <div class="notif-row-title">${isUnread ? '<span class="notif-unread-dot"></span>' : ''}${title}</div>
                 ${message ? `<div class="notif-row-message">${message}</div>` : ''}
                 ${dateStr ? `<div class="notif-row-date">${dateStr}</div>` : ''}
-                ${linkUrl ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="notif-row-link">${linkText}</a>` : ''}
+                ${linkUrl ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="notif-row-link">${linkText} <i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ''}
             </div>
         `;
         row.querySelector('.notif-row-link')?.addEventListener('click', (e) => e.stopPropagation());
