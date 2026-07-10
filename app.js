@@ -13,6 +13,10 @@ const resetForm     = document.getElementById('resetForm');
 const cropContainer = document.getElementById('cropCardsContainer');
 const resultCountEl = document.getElementById('resultCount');
 
+const blogContainer    = document.getElementById('blogCardsContainer');
+const blogModal        = document.getElementById('blogModal');
+const blogModalContent = document.getElementById('blogModalContent');
+
 // Pagination & query state
 let pageSize = 8;
 let lastVisible = null; // last document snapshot for pagination
@@ -371,6 +375,118 @@ async function loadMoreCrops() {
     }
 }
 
+// ===== Blog =====
+// Public marketing content, read from a 'posts' Firestore collection — not
+// gated behind sign-in, since it's meant to be visible on the landing page.
+// NOTE: this requires your Firestore rules to allow public reads of
+// 'posts' (e.g. allow read: if true;), since visitors browsing the landing
+// page haven't signed in yet.
+
+function renderBlogEmptyState(message) {
+    if (!blogContainer) return;
+    blogContainer.innerHTML = `<div class="blog-empty">${escapeHtml(message)}</div>`;
+}
+
+// Accepts a Firestore Timestamp, ISO string, or epoch millis and returns a
+// short human-readable date, or '' if it can't be parsed.
+function formatBlogDate(value) {
+    if (!value) return '';
+    try {
+        const date = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
+        if (isNaN(date.getTime())) return '';
+        return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch {
+        return '';
+    }
+}
+
+async function loadBlogPosts() {
+    if (!blogContainer) return;
+    const { collection, getDocs, query, orderBy, limit } = window.dbFns;
+    const db = window.firebaseDb;
+    try {
+        const postsCol = collection(db, 'posts');
+        const q = query(postsCol, orderBy('published_at', 'desc'), limit(6));
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+            renderBlogEmptyState('No blog posts yet — check back soon!');
+            return;
+        }
+
+        blogContainer.innerHTML = '';
+        snap.docs.forEach((d) => {
+            const post = { id: d.id, ...d.data() };
+            // Every field is escaped before interpolation — posts come from
+            // Firestore and should be treated as untrusted, the same as crop
+            // listings (see renderListings above).
+            const title   = escapeHtml(post.title || 'Untitled post');
+            const excerpt = escapeHtml(post.excerpt || '');
+            const tag     = escapeHtml(post.category || '');
+            const author  = escapeHtml(post.author || 'AgriMarket SL Team');
+            const image   = escapeHtml(post.image_url || FALLBACK_IMAGE);
+            const dateStr = formatBlogDate(post.published_at);
+
+            const card = document.createElement('div');
+            card.className = 'blog-card';
+            card.innerHTML = `
+                <img src="${image}" alt="${title}" class="blog-card-img" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}'">
+                <div class="blog-card-content">
+                    ${tag ? `<span class="blog-tag">${tag}</span>` : ''}
+                    <h3>${title}</h3>
+                    <p class="blog-meta">${author}${dateStr ? ' · ' + dateStr : ''}</p>
+                    <p>${excerpt}</p>
+                    <button type="button" class="blog-read-more">Read more <i class="fa-solid fa-arrow-right"></i></button>
+                </div>
+            `;
+            card.querySelector('.blog-read-more').addEventListener('click', () => openBlogPost(post.id));
+            blogContainer.appendChild(card);
+        });
+    } catch (err) {
+        console.error('Failed to load blog posts', err);
+        renderBlogEmptyState('Could not load blog posts right now. Please try again later.');
+    }
+}
+
+async function openBlogPost(postId) {
+    const { doc, getDoc } = window.dbFns;
+    const db = window.firebaseDb;
+
+    blogModalContent.innerHTML = '<p style="text-align:center;padding:2rem 0;">Loading…</p>';
+    blogModal.classList.add('active');
+
+    try {
+        const snap = await getDoc(doc(db, 'posts', postId));
+        if (!snap.exists()) {
+            blogModalContent.innerHTML = '<p>This post could not be found.</p>';
+            return;
+        }
+        const post = snap.data();
+        const title   = escapeHtml(post.title || 'Untitled post');
+        const author  = escapeHtml(post.author || 'AgriMarket SL Team');
+        const image   = escapeHtml(post.image_url || FALLBACK_IMAGE);
+        const dateStr = formatBlogDate(post.published_at);
+
+        // The full body is escaped first (never trust Firestore content),
+        // then split into paragraphs on blank lines so basic formatting
+        // survives without ever allowing raw HTML/script injection.
+        const bodyHtml = String(post.content || post.excerpt || '')
+            .split(/\n{2,}/)
+            .map((para) => `<p>${escapeHtml(para.trim()).replace(/\n/g, '<br>')}</p>`)
+            .join('');
+
+        blogModalContent.innerHTML = `
+            <img src="${image}" alt="${title}" class="blog-modal-img" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}'">
+            <h2>${title}</h2>
+            <p class="blog-modal-meta">${author}${dateStr ? ' · ' + dateStr : ''}</p>
+            <div class="blog-modal-body">${bodyHtml || '<p>No content yet.</p>'}</div>
+        `;
+    } catch (err) {
+        console.error('Failed to load blog post', err);
+        blogModalContent.innerHTML = '<p>Sorry, something went wrong loading this post.</p>';
+    }
+}
+
 async function applyFilters() {
     // Called when user submits search/filter. Reset pagination and load from server with filters
     const searchTerm = document.getElementById('searchInput').value.trim();
@@ -536,6 +652,51 @@ async function initApp() {
     document.getElementById('tabRegister')?.addEventListener('click', () => { showAuthTabs(); switchTab('register'); });
     document.getElementById('forgotPasswordLink')?.addEventListener('click', (e) => { e.preventDefault(); hideAuthTabs(); switchTab('reset'); });
     document.getElementById('backToLoginLink')?.addEventListener('click', (e) => { e.preventDefault(); showAuthTabs(); switchTab('login'); });
+
+    // Blog modal
+    document.getElementById('closeBlogModal')?.addEventListener('click', () => blogModal.classList.remove('active'));
+    blogModal?.addEventListener('click', (e) => { if (e.target === blogModal) blogModal.classList.remove('active'); });
+
+    // Blog posts are public marketing content, so load them regardless of
+    // sign-in state (unlike crop listings, which only load once a user is
+    // authenticated).
+    loadBlogPosts();
+
+    // Newsletter signup — writes to a 'newsletter_subscribers' Firestore
+    // collection, using the email itself as the document ID so re-submitting
+    // the same address just refreshes the timestamp instead of creating a
+    // duplicate. NOTE: this form is public (pre-login), so your Firestore
+    // rules need to allow unauthenticated creates on this collection, e.g.
+    // allow create: if true; allow read, update, delete: if false;
+    const newsletterForm = document.getElementById('newsletterForm');
+    newsletterForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const emailInput = document.getElementById('newsletterEmail');
+        const submitBtn = document.getElementById('newsletterSubmitBtn');
+        const email = emailInput.value.trim().toLowerCase();
+
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            triggerToast('Please enter a valid email address.');
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Subscribing…';
+        try {
+            await setDoc(doc(db, 'newsletter_subscribers', email), {
+                email,
+                subscribed_at: new Date().toISOString()
+            }, { merge: true });
+            triggerToast("You're subscribed! Thanks for joining our newsletter.");
+            newsletterForm.reset();
+        } catch (err) {
+            console.error('Newsletter signup failed', err);
+            triggerToast(mapFirebaseError(err));
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Subscribe';
+        }
+    });
 
     // NOTE: previously this function also wired up #btnStartLogin,
     // #btnStartRegister, #btnCtaLogin, #btnCtaRegister, #navToggle/#navLinks,
