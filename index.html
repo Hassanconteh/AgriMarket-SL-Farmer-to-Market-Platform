@@ -875,6 +875,39 @@
         .newsletter-form button:hover { background: #f0f9ff; transform: translateY(-1px); }
         .newsletter-form button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
         .newsletter-note { font-size: 0.75rem; opacity: 0.75; margin-top: 1rem; }
+
+        /* Google Sign-In button + divider, used on both auth modal tabs */
+        .btn-google {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.6rem;
+            background: white;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 0.8rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-google:hover { background: var(--bg-page); border-color: var(--sl-blue); }
+        .btn-google i { color: #ea4335; font-size: 1.05rem; }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin: 1.1rem 0;
+        }
+        .auth-divider::before, .auth-divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid var(--border);
+        }
+        .auth-divider span { padding: 0 0.75rem; }
     </style>
 </head>
 <body>
@@ -1258,9 +1291,9 @@
 
             <form id="loginForm" class="auth-form active">
                 <button type="button" id="googleSignInBtn" class="btn-full btn-google">
-        <i class="fa-brands fa-google"></i> Continue with Google
+                    <i class="fa-brands fa-google"></i> Continue with Google
                 </button>
-<div class="auth-divider"><span>or sign in with email</span></div>
+                <div class="auth-divider"><span>or sign in with email</span></div>
                 <div class="form-group">
                     <label for="loginEmail">Email Address</label>
                     <input type="email" id="loginEmail" autocomplete="email" placeholder="e.g., trader@freetown.sl" required>
@@ -1277,9 +1310,9 @@
 
             <form id="registerForm" class="auth-form">
                 <button type="button" id="googleSignUpBtn" class="btn-full btn-google">
-    <i class="fa-brands fa-google"></i> Continue with Google
-</button>
-<div class="auth-divider"><span>or create account with email</span></div>
+                    <i class="fa-brands fa-google"></i> Continue with Google
+                </button>
+                <div class="auth-divider"><span>or create account with email</span></div>
                 <div class="form-group">
                     <label for="regName">Full Name</label>
                     <input type="text" id="regName" autocomplete="name" placeholder="e.g. Hassan Conteh" required>
@@ -1742,9 +1775,12 @@
   const app = initializeApp(firebaseConfig);
   const analytics = getAnalytics(app);
   const auth = getAuth(app);
-  const googleProvider = new GoogleAuthProvider();
-window.googleProvider = googleProvider;
   const db = getFirestore(app);
+
+  // Google Sign-In provider, shared with app.js via window.googleProvider
+  // so the "Continue with Google" buttons in the auth modal can use it.
+  const googleProvider = new GoogleAuthProvider();
+  window.googleProvider = googleProvider;
 
   window.firebaseAuth = auth;
   window.firebaseDb = db;
