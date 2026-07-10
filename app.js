@@ -29,6 +29,36 @@ function escapeHtml(value) {
     }[ch]));
 }
 
+// Resolves a friendly first name for the navbar instead of showing the raw
+// email address. Order of preference:
+//   1. The Auth profile's displayName (set at registration going forward).
+//   2. For older accounts registered before we started setting displayName,
+//      fall back to the full_name we saved in their Firestore profile doc,
+//      and backfill the Auth displayName so this lookup isn't needed again.
+//   3. Worst case, the part of the email before the @.
+async function getFirstName(user) {
+    if (user?.displayName) {
+        const first = user.displayName.trim().split(/\s+/)[0];
+        if (first) return first;
+    }
+    try {
+        const { doc, getDoc } = window.dbFns;
+        const db = window.firebaseDb;
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) {
+            const fullName = snap.data().full_name;
+            const first = fullName ? String(fullName).trim().split(/\s+/)[0] : '';
+            if (first) {
+                window.authFns.updateProfile?.(user, { displayName: first }).catch(() => {});
+                return first;
+            }
+        }
+    } catch (err) {
+        console.warn('Could not look up stored full name', err);
+    }
+    return user?.email ? user.email.split('@')[0] : 'there';
+}
+
 function triggerToast(message) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -360,8 +390,42 @@ async function initApp() {
 
     const auth = window.firebaseAuth;
     const db = window.firebaseDb;
-    const { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } = window.authFns;
+    const { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile } = window.authFns;
     const { collection, getDocs, doc, setDoc } = window.dbFns;
+
+    // Returns a logged-in user from the marketing landing page (reached via
+    // a footer link) back to their dashboard.
+    function showDashboardView() {
+        document.getElementById('staticPageContainer').style.display = 'none';
+        document.getElementById('landingSections').style.display = 'none';
+        landingPage.style.display = 'none';
+        dashboardApp.style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    window.showDashboardView = showDashboardView;
+
+    // Renders the "logged in" state of the navbar. Shared by the auth-state
+    // observer and by the register handler below (registration needs to
+    // re-render immediately after setting displayName, since updateProfile()
+    // doesn't trigger onAuthStateChanged again on its own).
+    async function renderAuthedNav(user) {
+        const firstName = escapeHtml(await getFirstName(user));
+        navMenu.innerHTML = `
+            <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i class="fa-solid fa-shop"></i> Marketplace</button>
+            <span class="nav-link"><i class="fa-solid fa-user-check"></i> Hi, ${firstName}</span>
+            <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
+        `;
+        document.getElementById('navDashboardBtn').addEventListener('click', showDashboardView);
+        document.getElementById('navLogoutBtn').addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                triggerToast('You have been securely logged out.');
+            } catch (err) {
+                console.error('Sign out failed', err);
+                triggerToast(mapFirebaseError(err));
+            }
+        });
+    }
 
     // Auth state observer
     onAuthStateChanged(auth, async (user) => {
@@ -370,19 +434,7 @@ async function initApp() {
             landingPage.style.display = 'none';
             dashboardApp.style.display = 'block';
 
-            navMenu.innerHTML = `
-                <span class="nav-link"><i class="fa-solid fa-user-check"></i> ${user.email}</span>
-                <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
-            `;
-            document.getElementById('navLogoutBtn').addEventListener('click', async () => {
-                try {
-                    await signOut(auth);
-                    triggerToast('You have been securely logged out.');
-                } catch (err) {
-                    console.error('Sign out failed', err);
-                    triggerToast(mapFirebaseError(err));
-                }
-            });
+            await renderAuthedNav(user);
 
             // Load initial crops for signed-in user
             await loadInitialCrops();
@@ -404,12 +456,28 @@ async function initApp() {
 
         try {
             const cred = await createUserWithEmailAndPassword(auth, email, password);
-            // Save user profile...
+            const uid = cred.user.uid;
+
+            // Set the Auth profile's displayName to the user's first name so
+            // the navbar (and any future onAuthStateChanged callback) shows
+            // "Hi, <first name>" instead of the email address.
+            const firstName = name.trim().split(/\s+/)[0] || 'there';
+            try {
+                await updateProfile(cred.user, { displayName: firstName });
+            } catch (err) {
+                console.warn('Failed to set display name', err);
+            }
 
             landingPage.style.display = "none";
             dashboardApp.style.display = "block";
             await loadInitialCrops();
-            const uid = cred.user.uid;
+
+            // onAuthStateChanged already fired (before displayName was set)
+            // and rendered the navbar once — re-render it now that the
+            // profile has the first name, since updateProfile() alone
+            // doesn't trigger another onAuthStateChanged callback.
+            await renderAuthedNav(cred.user);
+
             // create a user profile document
             try {
                 await setDoc(doc(db, 'users', uid), { full_name: name, email, created_at: new Date().toISOString() });
