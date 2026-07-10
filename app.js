@@ -376,18 +376,23 @@ async function loadMoreCrops() {
 }
 
 // ===== Dashboard notifications =====
-// A small dismissible announcement bar shown right after login, sourced
-// from a public 'notifications' Firestore collection so you can publish
-// updates (price alerts, maintenance notices, etc.) without a code deploy.
-// Dismissed notifications are remembered per-browser (localStorage) so they
-// don't reappear once closed, but nothing is deleted from Firestore — other
-// users, or the same user on another device, will still see them.
-// NOTE: like blog posts, this requires a Firestore rule allowing reads,
-// e.g. match /notifications/{id} { allow read: if true; }
+// A bell icon lives in the sticky navbar (always visible while on the
+// dashboard, regardless of scroll position) and opens a dropdown listing
+// announcements from a public 'notifications' Firestore collection.
+//
+// Read/unread state is stored per-user in Firestore, at
+// users/{uid}/read_notifications/{notificationId} — one doc per
+// notification the user has opened. This is what makes it sync across
+// devices: reading a notification on your phone marks it read on your
+// laptop too, next time it loads. The in-memory Set below is just a
+// session cache so we don't re-fetch on every click.
+// NOTE: requires Firestore rules allowing:
+//   - public reads of 'notifications' (match /notifications/{id} { allow read: if true; })
+//   - a user to read/write only their own read-receipts, e.g.:
+//     match /users/{userId}/read_notifications/{notifId} {
+//       allow read, write: if request.auth != null && request.auth.uid == userId;
+//     }
 
-const NOTIFICATION_DISMISS_KEY = 'agrimarket_dismissed_notifications';
-const MAX_VISIBLE_NOTIFICATIONS = 3;
-const notificationList = document.getElementById('notificationList');
 const NOTIFICATION_ICONS = {
     info: 'fa-circle-info',
     success: 'fa-circle-check',
@@ -395,22 +400,57 @@ const NOTIFICATION_ICONS = {
     urgent: 'fa-bell'
 };
 
-function getDismissedNotificationIds() {
+let currentNotifications = [];         // last-loaded batch, kept in memory for the dropdown
+let readNotificationIdsCache = new Set(); // session cache of this user's read-notification IDs
+
+// Fetches which notifications this user has already read, from their
+// Firestore read-receipts subcollection. Called once per login.
+async function loadReadNotificationIds(uid) {
+    const { collection, getDocs } = window.dbFns;
+    const db = window.firebaseDb;
     try {
-        return new Set(JSON.parse(localStorage.getItem(NOTIFICATION_DISMISS_KEY) || '[]'));
-    } catch {
-        return new Set();
+        const snap = await getDocs(collection(db, 'users', uid, 'read_notifications'));
+        readNotificationIdsCache = new Set(snap.docs.map((d) => d.id));
+    } catch (err) {
+        console.warn('Could not load read notifications', err);
+        readNotificationIdsCache = new Set();
     }
 }
 
-function dismissNotification(id) {
-    const dismissed = getDismissedNotificationIds();
-    dismissed.add(id);
-    try {
-        localStorage.setItem(NOTIFICATION_DISMISS_KEY, JSON.stringify([...dismissed]));
-    } catch (err) {
-        console.warn('Could not persist dismissed notification', err);
-    }
+// Updates the in-memory/UI state immediately (optimistic update) and
+// returns whether it was actually a change (i.e. it was previously unread).
+function markReadLocally(id) {
+    if (readNotificationIdsCache.has(id)) return false;
+    readNotificationIdsCache.add(id);
+    return true;
+}
+
+// Persists a single read receipt to Firestore in the background. Fire-and-
+// forget by design — the UI has already updated optimistically above, so a
+// slow or failed write shouldn't block or flicker the interface. If it
+// fails (e.g. offline), the notification will just get marked again on a
+// future visit, which is harmless.
+function persistNotificationRead(uid, id) {
+    if (!uid) return;
+    const { doc, setDoc } = window.dbFns;
+    const db = window.firebaseDb;
+    setDoc(doc(db, 'users', uid, 'read_notifications', id), { read_at: new Date().toISOString() })
+        .catch((err) => console.warn('Could not persist read notification', err));
+}
+
+function markAllNotificationsRead() {
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    const newlyRead = currentNotifications.filter((n) => markReadLocally(n.id));
+    if (newlyRead.length === 0 || !uid) return;
+
+    // A batch write is one round trip instead of one per notification.
+    const { doc, writeBatch } = window.dbFns;
+    const db = window.firebaseDb;
+    const batch = writeBatch(db);
+    newlyRead.forEach((n) => {
+        batch.set(doc(db, 'users', uid, 'read_notifications', n.id), { read_at: new Date().toISOString() });
+    });
+    batch.commit().catch((err) => console.warn('Could not persist read notifications', err));
 }
 
 // Only allow http(s) links for the optional CTA button — escaping protects
@@ -425,33 +465,71 @@ function isSafeUrl(url) {
     }
 }
 
-function buildNotificationEl(n) {
-    const type = ['info', 'success', 'warning', 'urgent'].includes(n.type) ? n.type : 'info';
-    const title    = escapeHtml(n.title || '');
-    const message  = escapeHtml(n.message || '');
-    const linkUrl  = n.link_url && isSafeUrl(n.link_url) ? escapeHtml(n.link_url) : '';
-    const linkText = escapeHtml(n.link_text || 'Learn more');
+function updateNotifBadge() {
+    const badge = document.getElementById('notifBadge');
+    if (!badge) return;
+    const unreadCount = currentNotifications.filter((n) => !readNotificationIdsCache.has(n.id)).length;
+    if (unreadCount > 0) {
+        badge.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+        badge.hidden = false;
+    } else {
+        badge.hidden = true;
+    }
+}
 
-    const el = document.createElement('div');
-    el.className = `notification-item notification-${type}`;
-    el.innerHTML = `
-        <i class="fa-solid ${NOTIFICATION_ICONS[type]} notification-icon"></i>
-        <div class="notification-body">
-            ${title ? `<strong>${title}</strong>` : ''}
-            ${message ? `<span>${message}</span>` : ''}
-            ${linkUrl ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="notification-link">${linkText} <i class="fa-solid fa-arrow-right"></i></a>` : ''}
-        </div>
-        <button type="button" class="notification-dismiss" aria-label="Dismiss notification"><i class="fa-solid fa-xmark"></i></button>
-    `;
-    el.querySelector('.notification-dismiss').addEventListener('click', () => {
-        dismissNotification(n.id);
-        el.remove();
+function renderNotificationDropdown() {
+    const list = document.getElementById('notifDropdownList');
+    if (!list) return;
+
+    if (currentNotifications.length === 0) {
+        list.innerHTML = '<div class="notif-dropdown-empty">No notifications yet.</div>';
+        return;
+    }
+
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    list.innerHTML = '';
+    currentNotifications.forEach((n) => {
+        const isUnread = !readNotificationIdsCache.has(n.id);
+        const type = ['info', 'success', 'warning', 'urgent'].includes(n.type) ? n.type : 'info';
+        // Every field is escaped before interpolation, same as blog posts.
+        const title    = escapeHtml(n.title || '');
+        const message  = escapeHtml(n.message || '');
+        const dateStr  = formatBlogDate(n.created_at);
+        const linkUrl  = n.link_url && isSafeUrl(n.link_url) ? escapeHtml(n.link_url) : '';
+        const linkText = escapeHtml(n.link_text || 'Learn more');
+
+        const row = document.createElement('div');
+        row.className = `notif-row${isUnread ? ' unread' : ''}`;
+        row.innerHTML = `
+            <i class="fa-solid ${NOTIFICATION_ICONS[type]} notif-row-icon notif-icon-${type}"></i>
+            <div class="notif-row-body">
+                <div class="notif-row-title">${isUnread ? '<span class="notif-unread-dot"></span>' : ''}${title}</div>
+                ${message ? `<div class="notif-row-message">${message}</div>` : ''}
+                ${dateStr ? `<div class="notif-row-date">${dateStr}</div>` : ''}
+                ${linkUrl ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="notif-row-link">${linkText}</a>` : ''}
+            </div>
+        `;
+        row.querySelector('.notif-row-link')?.addEventListener('click', (e) => e.stopPropagation());
+        row.addEventListener('click', () => {
+            if (markReadLocally(n.id)) {
+                row.classList.remove('unread');
+                row.querySelector('.notif-unread-dot')?.remove();
+                updateNotifBadge();
+                persistNotificationRead(uid, n.id);
+            }
+        });
+        list.appendChild(row);
     });
-    return el;
 }
 
 async function loadNotifications() {
-    if (!notificationList) return;
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    if (uid) {
+        await loadReadNotificationIds(uid);
+    } else {
+        readNotificationIdsCache = new Set();
+    }
+
     const { collection, getDocs, query, orderBy, limit } = window.dbFns;
     const db = window.firebaseDb;
 
@@ -462,27 +540,56 @@ async function loadNotifications() {
         // same approach used for blog posts.
         const q = query(notifCol, orderBy('created_at', 'desc'), limit(10));
         const snap = await getDocs(q);
-
-        const dismissed = getDismissedNotificationIds();
         const now = Date.now();
 
-        const visible = snap.docs
+        currentNotifications = snap.docs
             .map((d) => ({ id: d.id, ...d.data() }))
             .filter((n) => n.active !== false)
             .filter((n) => {
                 if (!n.expires_at) return true;
                 const expires = typeof n.expires_at?.toDate === 'function' ? n.expires_at.toDate() : new Date(n.expires_at);
                 return isNaN(expires.getTime()) || expires.getTime() > now;
-            })
-            .filter((n) => !dismissed.has(n.id))
-            .slice(0, MAX_VISIBLE_NOTIFICATIONS);
+            });
 
-        notificationList.innerHTML = '';
-        visible.forEach((n) => notificationList.appendChild(buildNotificationEl(n)));
+        updateNotifBadge();
+        renderNotificationDropdown();
     } catch (err) {
         // Fail quietly — a broken notification feed shouldn't block the dashboard.
         console.error('Failed to load notifications', err);
+        const list = document.getElementById('notifDropdownList');
+        if (list) list.innerHTML = '<div class="notif-dropdown-empty">Could not load notifications.</div>';
     }
+}
+
+// Wires up the bell button + dropdown. Must be called again every time the
+// navbar markup is re-rendered (renderAuthedNav replaces navMenu.innerHTML,
+// which destroys any previously attached listeners on these elements).
+function setupNotificationBell() {
+    const bellBtn = document.getElementById('notifBellBtn');
+    const dropdown = document.getElementById('notifDropdown');
+    const markAllBtn = document.getElementById('notifMarkAllBtn');
+    if (!bellBtn || !dropdown) return;
+
+    bellBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = !dropdown.hidden;
+        dropdown.hidden = isOpen;
+        bellBtn.setAttribute('aria-expanded', String(!isOpen));
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== bellBtn) {
+            dropdown.hidden = true;
+            bellBtn.setAttribute('aria-expanded', 'false');
+        }
+    });
+
+    markAllBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        markAllNotificationsRead();
+        updateNotifBadge();
+        renderNotificationDropdown();
+    });
 }
 
 // ===== Blog =====
@@ -637,11 +744,25 @@ async function initApp() {
     async function renderAuthedNav(user) {
         const firstName = escapeHtml(await getFirstName(user));
         navMenu.innerHTML = `
+            <div class="notif-wrapper">
+                <button id="notifBellBtn" class="notif-bell-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Notifications">
+                    <i class="fa-solid fa-bell"></i>
+                    <span id="notifBadge" class="notif-badge" hidden>0</span>
+                </button>
+                <div id="notifDropdown" class="notif-dropdown" hidden>
+                    <div class="notif-dropdown-header">
+                        <span>Notifications</span>
+                        <button id="notifMarkAllBtn" type="button" class="notif-mark-all">Mark all read</button>
+                    </div>
+                    <div id="notifDropdownList" class="notif-dropdown-list"><div class="notif-dropdown-empty">Loading…</div></div>
+                </div>
+            </div>
             <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i class="fa-solid fa-shop"></i> Marketplace</button>
             <span class="nav-link"><i class="fa-solid fa-user-check"></i> Hi, ${firstName}</span>
             <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
         `;
         document.getElementById('navDashboardBtn').addEventListener('click', showDashboardView);
+        setupNotificationBell();
         document.getElementById('navLogoutBtn').addEventListener('click', async () => {
             try {
                 await signOut(auth);
@@ -669,7 +790,8 @@ async function initApp() {
             // No user
             landingPage.style.display = 'block';
             dashboardApp.style.display = 'none';
-            if (notificationList) notificationList.innerHTML = '';
+            currentNotifications = [];
+            readNotificationIdsCache = new Set();
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
             document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
         }
