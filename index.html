@@ -950,7 +950,7 @@
     <div id="landingPage" class="hero full-screen float-in" style="animation-delay: 0.2s;">
         <div class="hero-content">
             <h1>Connecting Sierra Leone's Farmers to the World</h1>
-            <p>Sign in to access real-time crop prices, contact local farmers, and view agricultural data.</p>
+            <p id="heroSubtext">Sign in to access real-time crop prices, contact local farmers, and view agricultural data.</p>
         </div>
     </div>
 
@@ -1710,6 +1710,7 @@
             } else {
                 landing.style.display = '';
                 document.getElementById('landingSections').style.display = 'block';
+                window.syncHeroTextForAuthState?.();
             }
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -1722,6 +1723,24 @@
         // etc.). If the dashboard is currently showing, those sections are
         // hidden behind it, so we switch back to the landing page first,
         // then scroll — otherwise the click does nothing, which was the bug.
+        //
+        // BUGFIX: switching to the landing page also un-hides the hero
+        // banner, whose default copy says "Sign in to access...". For a
+        // user who is already logged in (i.e. they were just looking at the
+        // dashboard), that reads as if they'd been logged out — even though
+        // the navbar above still correctly shows "Hi, <name>" / "Marketplace"
+        // / "Log Out". syncHeroTextForAuthState() swaps that message so it
+        // never contradicts the navbar's logged-in state.
+        function syncHeroTextForAuthState() {
+            const heroSubtext = document.getElementById('heroSubtext');
+            if (!heroSubtext) return;
+            const isLoggedIn = !!(window.firebaseAuth && window.firebaseAuth.currentUser);
+            heroSubtext.textContent = isLoggedIn
+                ? "You're signed in — browse what AgriMarket SL offers below, or use the Marketplace button above to return to your dashboard."
+                : "Sign in to access real-time crop prices, contact local farmers, and view agricultural data.";
+        }
+        window.syncHeroTextForAuthState = syncHeroTextForAuthState;
+
         document.querySelectorAll('.site-footer .footer-col a[href^="#"]').forEach(link => {
             link.addEventListener('click', function(e) {
                 const href = this.getAttribute('href');
@@ -1745,6 +1764,7 @@
                 }
                 document.getElementById('landingPage').style.display = '';
                 document.getElementById('landingSections').style.display = 'block';
+                syncHeroTextForAuthState();
 
                 // Small delay to let display changes render
                 setTimeout(() => {
@@ -1759,7 +1779,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1792,7 +1812,8 @@
     sendPasswordResetEmail,
     updateProfile,
     GoogleAuthProvider,
-    signInWithPopup
+    signInWithRedirect,
+    getRedirectResult
   };
   window.dbFns = {
     collection,
