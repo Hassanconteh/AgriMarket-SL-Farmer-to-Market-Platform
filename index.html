@@ -1820,57 +1820,65 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // Session security: use session-only persistence so a signed-in user is
-  // automatically signed out once the browser (or last open tab) is closed,
-  // rather than staying signed in indefinitely (the Firebase default).
-  // Must be set before any sign-in call happens; since this runs at module
-  // init time, well before any button click can trigger a sign-in, it's
-  // safe not to await it here.
-  setPersistence(auth, browserSessionPersistence).catch((err) => {
-    console.warn('Could not set auth persistence', err);
-  });
-
   // Google Sign-In provider, shared with app.js via window.googleProvider
   // so the "Continue with Google" buttons in the auth modal can use it.
   const googleProvider = new GoogleAuthProvider();
   window.googleProvider = googleProvider;
 
-  window.firebaseAuth = auth;
-  window.firebaseDb = db;
-  window.authFns = {
-    onAuthStateChanged,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    signOut,
-    sendPasswordResetEmail,
-    updateProfile,
-    GoogleAuthProvider,
-    signInWithRedirect,
-    getRedirectResult,
-    sendEmailVerification
-  };
-  window.dbFns = {
-    collection,
-    getDocs,
-    query,
-    where,
-    orderBy,
-    limit,
-    startAfter,
-    doc,
-    setDoc,
-    getDoc,
-    writeBatch
-  };
+  // Session security: use session-only persistence so a signed-in user is
+  // automatically signed out once the browser (or last open tab) is closed,
+  // rather than staying signed in indefinitely (the Firebase default).
+  //
+  // IMPORTANT: window.firebaseAuth (and everything else app.js waits on via
+  // waitForFirebase()) is only exposed AFTER this promise settles. Auth
+  // initialization — including completing a pending Google redirect
+  // sign-in — runs against this same `auth` instance, so if app.js were
+  // allowed to call getRedirectResult() while the persistence switch was
+  // still in flight, the just-completed Google sign-in could get lost in
+  // the handoff between persistence layers. That race was the cause of
+  // "Google sign-in succeeds but the app shows the landing page anyway."
+  setPersistence(auth, browserSessionPersistence)
+    .catch((err) => {
+      console.warn('Could not set auth persistence', err);
+    })
+    .finally(() => {
+      window.firebaseAuth = auth;
+      window.firebaseDb = db;
+      window.authFns = {
+        onAuthStateChanged,
+        signInWithEmailAndPassword,
+        createUserWithEmailAndPassword,
+        signOut,
+        sendPasswordResetEmail,
+        updateProfile,
+        GoogleAuthProvider,
+        signInWithRedirect,
+        getRedirectResult,
+        sendEmailVerification
+      };
+      window.dbFns = {
+        collection,
+        getDocs,
+        query,
+        where,
+        orderBy,
+        limit,
+        startAfter,
+        doc,
+        setDoc,
+        getDoc,
+        writeBatch
+      };
 
-  window.testFirestore = async function () {
-    try {
-      const snap = await getDocs(collection(db, 'crops'));
-      console.log('crops', snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) {
-      console.error('Firestore test failed', err);
-    }
-  };
+      window.testFirestore = async function () {
+        try {
+          const snap = await getDocs(collection(db, 'crops'));
+          console.log('crops', snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (err) {
+          console.error('Firestore test failed', err);
+        }
+      };
+    });
 </script>
 
 </body>
