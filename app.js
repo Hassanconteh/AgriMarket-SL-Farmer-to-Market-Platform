@@ -2,6 +2,14 @@
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=500&q=80";
 
+// UID of the account allowed to publish listings (that's you). Find your
+// UID in Firebase Console -> Authentication -> Users -> copy the "User UID"
+// column for your account, then paste it here. This is checked again
+// server-side by the Firestore security rules below — this client-side
+// check only controls whether the button/form is shown, it is NOT the
+// actual security boundary.
+const ADMIN_UID = "XyU8YJ6SdOObuGo6JwGJj25L0nm1";
+
 const landingPage   = document.getElementById('landingPage');
 const dashboardApp  = document.getElementById('dashboardApp');
 const navMenu       = document.getElementById('navMenu');
@@ -12,6 +20,10 @@ const resetForm     = document.getElementById('resetForm');
 
 const cropContainer = document.getElementById('cropCardsContainer');
 const resultCountEl = document.getElementById('resultCount');
+
+const addListingBtn    = document.getElementById('addListingBtn');
+const addListingModal  = document.getElementById('addListingModal');
+const addListingForm   = document.getElementById('addListingForm');
 
 const blogContainer    = document.getElementById('blogCardsContainer');
 const blogModal        = document.getElementById('blogModal');
@@ -966,6 +978,78 @@ async function handleGoogleRedirectResult(auth, db) {
     }
 }
 
+// Creates a new crop listing. Writes the public 'crops/{id}' doc and the
+// private 'crops/{id}/private/contact' doc together in a single batch, so
+// it's impossible to end up with one but not the other (which is what
+// caused "Contact info is not available" on listings added by hand through
+// the Firebase Console). Restricted to the admin account client-side (the
+// button is hidden for everyone else); the real enforcement is the
+// Firestore security rule on writes to 'crops', which must check
+// request.auth.uid == ADMIN_UID.
+async function handleAddListingSubmit(e) {
+    e.preventDefault();
+
+    const auth = window.firebaseAuth;
+    const user = auth?.currentUser;
+    if (!user || user.uid !== ADMIN_UID) {
+        triggerToast('You are not authorized to add listings.');
+        return;
+    }
+
+    const name       = document.getElementById('listingName').value.trim();
+    const category   = document.getElementById('listingCategory').value.trim();
+    const location   = document.getElementById('listingLocation').value;
+    const price      = Number(document.getElementById('listingPrice').value);
+    const imageUrl   = document.getElementById('listingImageUrl').value.trim();
+    const farmerName = document.getElementById('listingFarmerName').value.trim();
+    const phone      = document.getElementById('listingPhone').value.trim();
+
+    if (!name || !category || !location || !price || !farmerName || !phone) {
+        triggerToast('Please fill in all required fields.');
+        return;
+    }
+
+    const db = window.firebaseDb;
+    const { collection, doc, writeBatch } = window.dbFns;
+
+    const submitBtn = addListingForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Publishing…';
+
+    try {
+        const cropRef = doc(collection(db, 'crops'));
+        const batch = writeBatch(db);
+
+        batch.set(cropRef, {
+            name,
+            name_lower: name.toLowerCase(), // required by the prefix-search query in fetchCropsFromFirestore
+            category,
+            location,
+            price,
+            image_url: imageUrl || '',
+            created_at: new Date().toISOString()
+        });
+
+        batch.set(doc(db, 'crops', cropRef.id, 'private', 'contact'), {
+            farmer_name: farmerName,
+            phone
+        });
+
+        await batch.commit();
+
+        triggerToast('Listing published.');
+        addListingForm.reset();
+        addListingModal.classList.remove('active');
+        await loadInitialCrops();
+    } catch (err) {
+        console.error('Failed to create listing', err);
+        triggerToast(mapFirebaseError(err));
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Publish Listing';
+    }
+}
+
 async function initApp() {
     try {
         await waitForFirebase();
@@ -1050,6 +1134,12 @@ async function initApp() {
 
             await renderAuthedNav(user);
 
+            // Only the admin account gets the "Add Listing" button. This is
+            // a UI convenience only — the real enforcement is the Firestore
+            // security rule on writes to 'crops', since anyone can inspect
+            // client JS and see this check.
+            if (addListingBtn) addListingBtn.hidden = (user.uid !== ADMIN_UID);
+
             // Load initial crops and the notification bar for signed-in user
             await loadInitialCrops();
             loadNotifications();
@@ -1060,6 +1150,7 @@ async function initApp() {
             // No user
             landingPage.style.display = 'block';
             dashboardApp.style.display = 'none';
+            if (addListingBtn) addListingBtn.hidden = true;
             currentNotifications = [];
             readNotificationIdsCache = new Set();
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
@@ -1179,6 +1270,13 @@ async function initApp() {
     // Blog modal
     document.getElementById('closeBlogModal')?.addEventListener('click', () => blogModal.classList.remove('active'));
     blogModal?.addEventListener('click', (e) => { if (e.target === blogModal) blogModal.classList.remove('active'); });
+
+    // Add Listing modal (admin-only — button itself stays hidden for
+    // everyone else, see the ADMIN_UID check in the auth-state observer)
+    addListingBtn?.addEventListener('click', () => addListingModal.classList.add('active'));
+    document.getElementById('closeAddListingModal')?.addEventListener('click', () => addListingModal.classList.remove('active'));
+    addListingModal?.addEventListener('click', (e) => { if (e.target === addListingModal) addListingModal.classList.remove('active'); });
+    addListingForm?.addEventListener('submit', handleAddListingSubmit);
 
     // Blog posts are public marketing content, so load them regardless of
     // sign-in state (unlike crop listings, which only load once a user is
