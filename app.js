@@ -8,7 +8,7 @@ const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213
 // server-side by the Firestore security rules below — this client-side
 // check only controls whether the button/form is shown, it is NOT the
 // actual security boundary.
-const ADMIN_UID = "XyU8YJ6SdOObuGo6JwGJj25L0nm1";
+const ADMIN_UID = "TYyyC49B3haDvSWQMqM0DbNaL2v1";
 
 const landingPage   = document.getElementById('landingPage');
 const dashboardApp  = document.getElementById('dashboardApp');
@@ -24,6 +24,16 @@ const resultCountEl = document.getElementById('resultCount');
 const addListingBtn    = document.getElementById('addListingBtn');
 const addListingModal  = document.getElementById('addListingModal');
 const addListingForm   = document.getElementById('addListingForm');
+const addListingModalTitle    = document.getElementById('addListingModalTitle');
+const addListingModalSubtitle = document.getElementById('addListingModalSubtitle');
+const addListingSubmitBtn     = document.getElementById('addListingSubmitBtn');
+
+const pendingApprovalsSection   = document.getElementById('pendingApprovalsSection');
+const pendingApprovalsContainer = document.getElementById('pendingApprovalsContainer');
+const pendingApprovalsCount     = document.getElementById('pendingApprovalsCount');
+
+const mySubmissionsSection   = document.getElementById('mySubmissionsSection');
+const mySubmissionsContainer = document.getElementById('mySubmissionsContainer');
 
 const blogContainer    = document.getElementById('blogCardsContainer');
 const blogModal        = document.getElementById('blogModal');
@@ -406,6 +416,15 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
         // Build query parts
         const constraints = [];
 
+        // Public listings only ever show approved crops — pending
+        // submissions stay invisible until the admin approves them, and
+        // rejected ones stay hidden permanently. IMPORTANT: any crop docs
+        // created before this field existed won't have a 'status' field
+        // and will be excluded by this filter — they need 'status: approved'
+        // added manually (or re-created via the Add Listing form) or they
+        // will silently disappear from the marketplace.
+        constraints.push(where('status', '==', 'approved'));
+
         if (location && location !== 'All') {
             constraints.push(where('location', '==', location));
         }
@@ -458,7 +477,7 @@ async function fetchCropsFromFirestore({ searchTerm = '', location = 'All', page
             try {
                 const cropsCol = collection(db, 'crops');
                 let q2 = null;
-                const parts = [];
+                const parts = [where('status', '==', 'approved')];
                 if (location && location !== 'All') parts.push(where('location', '==', location));
                 parts.push(limit(pageSizeLocal));
                 if (startAfterDoc) parts.push(startAfter(startAfterDoc));
@@ -982,17 +1001,29 @@ async function handleGoogleRedirectResult(auth, db) {
 // private 'crops/{id}/private/contact' doc together in a single batch, so
 // it's impossible to end up with one but not the other (which is what
 // caused "Contact info is not available" on listings added by hand through
-// the Firebase Console). Restricted to the admin account client-side (the
-// button is hidden for everyone else); the real enforcement is the
-// Firestore security rule on writes to 'crops', which must check
-// request.auth.uid == ADMIN_UID.
+// the Firebase Console).
+//
+// Behavior branches by role:
+// - Admin: status is set to 'approved' and the listing is live immediately.
+// - Any other signed-in, email-verified user: status is set to 'pending'
+//   and submitted_by is stamped with their uid, so it only becomes visible
+//   in the public listings once the admin approves it (see
+//   loadPendingApprovals/handleApproveListing below).
+// Both branches are re-checked server-side by the Firestore security rules
+// on 'crops' — this is not just a client-side gate.
 async function handleAddListingSubmit(e) {
     e.preventDefault();
 
     const auth = window.firebaseAuth;
     const user = auth?.currentUser;
-    if (!user || user.uid !== ADMIN_UID) {
-        triggerToast('You are not authorized to add listings.');
+    if (!user) {
+        triggerToast('Please sign in first.');
+        return;
+    }
+
+    const isAdmin = user.uid === ADMIN_UID;
+    if (!isAdmin && !user.emailVerified) {
+        triggerToast('Please verify your email before submitting a listing.');
         return;
     }
 
@@ -1012,9 +1043,8 @@ async function handleAddListingSubmit(e) {
     const db = window.firebaseDb;
     const { collection, doc, writeBatch } = window.dbFns;
 
-    const submitBtn = addListingForm.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Publishing…';
+    addListingSubmitBtn.disabled = true;
+    addListingSubmitBtn.textContent = isAdmin ? 'Publishing…' : 'Submitting…';
 
     try {
         const cropRef = doc(collection(db, 'crops'));
@@ -1027,6 +1057,9 @@ async function handleAddListingSubmit(e) {
             location,
             price,
             image_url: imageUrl || '',
+            status: isAdmin ? 'approved' : 'pending',
+            submitted_by: user.uid,
+            submitted_by_email: user.email || '',
             created_at: new Date().toISOString()
         });
 
@@ -1037,17 +1070,151 @@ async function handleAddListingSubmit(e) {
 
         await batch.commit();
 
-        triggerToast('Listing published.');
+        if (isAdmin) {
+            triggerToast('Listing published.');
+            await loadInitialCrops();
+        } else {
+            triggerToast("Listing submitted! We'll notify you once it's reviewed.");
+            await loadMySubmissions(user.uid);
+        }
         addListingForm.reset();
         addListingModal.classList.remove('active');
-        await loadInitialCrops();
     } catch (err) {
         console.error('Failed to create listing', err);
         triggerToast(mapFirebaseError(err));
     } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Publish Listing';
+        addListingSubmitBtn.disabled = false;
+        addListingSubmitBtn.textContent = isAdmin ? 'Publish Listing' : 'Submit for Review';
     }
+}
+
+// ===== Pending approvals (admin only) =====
+async function loadPendingApprovals() {
+    if (!pendingApprovalsContainer) return;
+    const db = window.firebaseDb;
+    const { collection, query, where, orderBy, getDocs } = window.dbFns;
+
+    try {
+        const q = query(collection(db, 'crops'), where('status', '==', 'pending'), orderBy('created_at', 'asc'));
+        const snap = await getDocs(q);
+        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        renderPendingApprovals(items);
+    } catch (err) {
+        console.error('Failed to load pending approvals', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
+function renderPendingApprovals(items) {
+    pendingApprovalsCount.textContent = items.length ? `${items.length} awaiting review` : '';
+    pendingApprovalsContainer.innerHTML = '';
+
+    if (!items.length) {
+        pendingApprovalsContainer.innerHTML = '<p class="text-muted">No listings waiting for approval.</p>';
+        return;
+    }
+
+    items.forEach((item) => {
+        const name     = escapeHtml(item.name || 'Unnamed listing');
+        const location = escapeHtml(item.location || '');
+        const category = escapeHtml(item.category || '');
+        const imageUrl = escapeHtml(item.image_url || FALLBACK_IMAGE);
+        const email    = escapeHtml(item.submitted_by_email || 'unknown');
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+            <img src="${imageUrl}" alt="${name}" class="card-img" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}'">
+            <div class="card-content">
+                <div class="badge-row">
+                    ${location ? `<span class="badge badge-location"><i class="fa-solid fa-location-dot"></i> ${location}</span>` : ''}
+                    ${category ? `<span class="badge badge-category">${category}</span>` : ''}
+                </div>
+                <h3 class="card-title">${name}</h3>
+                <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
+                <p class="text-muted" style="font-size:0.8rem; margin: 0.25rem 0;">Submitted by ${email}</p>
+                <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                    <button type="button" class="btn-approve" data-id="${item.id}">Approve</button>
+                    <button type="button" class="btn-reject" data-id="${item.id}">Reject</button>
+                </div>
+            </div>
+        `;
+        card.querySelector('.btn-approve').addEventListener('click', () => handleReviewListing(item.id, 'approved'));
+        card.querySelector('.btn-reject').addEventListener('click', () => handleReviewListing(item.id, 'rejected'));
+        pendingApprovalsContainer.appendChild(card);
+    });
+}
+
+async function handleReviewListing(cropId, newStatus) {
+    const db = window.firebaseDb;
+    const { doc, setDoc } = window.dbFns;
+    try {
+        // setDoc with merge:true only touches the 'status' field, leaving
+        // the rest of the listing (and the separate private/contact doc)
+        // untouched — matches the Firestore rule, which only allows the
+        // admin to update 'crops' docs, not farmers editing their own after
+        // submission.
+        await setDoc(doc(db, 'crops', cropId), { status: newStatus }, { merge: true });
+        triggerToast(newStatus === 'approved' ? 'Listing approved and now live.' : 'Listing rejected.');
+        await loadPendingApprovals();
+        if (newStatus === 'approved') await loadInitialCrops();
+    } catch (err) {
+        console.error('Failed to update listing status', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
+// ===== My submissions (farmers) =====
+async function loadMySubmissions(uid) {
+    if (!mySubmissionsContainer) return;
+    const db = window.firebaseDb;
+    const { collection, query, where, orderBy, getDocs } = window.dbFns;
+
+    try {
+        const q = query(collection(db, 'crops'), where('submitted_by', '==', uid), orderBy('created_at', 'desc'));
+        const snap = await getDocs(q);
+        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        renderMySubmissions(items);
+    } catch (err) {
+        console.error('Failed to load your submissions', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
+function renderMySubmissions(items) {
+    mySubmissionsContainer.innerHTML = '';
+
+    if (!items.length) {
+        mySubmissionsContainer.innerHTML = '<p class="text-muted">You haven\'t submitted any listings yet.</p>';
+        return;
+    }
+
+    const statusLabels = { pending: 'Pending review', approved: 'Approved', rejected: 'Rejected' };
+
+    items.forEach((item) => {
+        const name     = escapeHtml(item.name || 'Unnamed listing');
+        const location = escapeHtml(item.location || '');
+        const category = escapeHtml(item.category || '');
+        const imageUrl = escapeHtml(item.image_url || FALLBACK_IMAGE);
+        const status   = item.status || 'pending';
+        const statusLabel = escapeHtml(statusLabels[status] || status);
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+            <img src="${imageUrl}" alt="${name}" class="card-img" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}'">
+            <div class="card-content">
+                <div class="badge-row">
+                    <span class="badge badge-status-${status}">${statusLabel}</span>
+                    ${location ? `<span class="badge badge-location"><i class="fa-solid fa-location-dot"></i> ${location}</span>` : ''}
+                    ${category ? `<span class="badge badge-category">${category}</span>` : ''}
+                </div>
+                <h3 class="card-title">${name}</h3>
+                <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
+            </div>
+        `;
+        mySubmissionsContainer.appendChild(card);
+    });
 }
 
 async function initApp() {
@@ -1134,11 +1301,37 @@ async function initApp() {
 
             await renderAuthedNav(user);
 
-            // Only the admin account gets the "Add Listing" button. This is
-            // a UI convenience only — the real enforcement is the Firestore
-            // security rule on writes to 'crops', since anyone can inspect
-            // client JS and see this check.
-            if (addListingBtn) addListingBtn.hidden = (user.uid !== ADMIN_UID);
+            // Refresh emailVerified/uid off the server rather than the
+            // cached user object, so a user who just verified their email
+            // in another tab immediately sees the right buttons here too.
+            try { await user.reload(); } catch (err) { console.warn('Could not refresh user before role check', err); }
+
+            const isAdmin = user.uid === ADMIN_UID;
+            const isVerifiedFarmer = !isAdmin && user.emailVerified;
+
+            // The "Add Listing" button serves two roles depending on who's
+            // signed in: for the admin it publishes instantly, for any
+            // other verified user it submits for approval. Which one
+            // applies is re-checked server-side by the Firestore rules on
+            // 'crops' — this client-side branch only controls the button
+            // label/visibility and what status the write requests.
+            if (addListingBtn) {
+                addListingBtn.hidden = !(isAdmin || isVerifiedFarmer);
+                if (isAdmin) {
+                    addListingBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add Listing';
+                } else {
+                    addListingBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Sell Your Crop';
+                }
+            }
+
+            if (pendingApprovalsSection) pendingApprovalsSection.hidden = !isAdmin;
+            if (mySubmissionsSection) mySubmissionsSection.hidden = isAdmin;
+
+            if (isAdmin) {
+                loadPendingApprovals();
+            } else if (isVerifiedFarmer) {
+                loadMySubmissions(user.uid);
+            }
 
             // Load initial crops and the notification bar for signed-in user
             await loadInitialCrops();
@@ -1151,6 +1344,8 @@ async function initApp() {
             landingPage.style.display = 'block';
             dashboardApp.style.display = 'none';
             if (addListingBtn) addListingBtn.hidden = true;
+            if (pendingApprovalsSection) pendingApprovalsSection.hidden = true;
+            if (mySubmissionsSection) mySubmissionsSection.hidden = true;
             currentNotifications = [];
             readNotificationIdsCache = new Set();
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
@@ -1273,7 +1468,19 @@ async function initApp() {
 
     // Add Listing modal (admin-only — button itself stays hidden for
     // everyone else, see the ADMIN_UID check in the auth-state observer)
-    addListingBtn?.addEventListener('click', () => addListingModal.classList.add('active'));
+    addListingBtn?.addEventListener('click', () => {
+        const isAdmin = window.firebaseAuth?.currentUser?.uid === ADMIN_UID;
+        if (isAdmin) {
+            addListingModalTitle.textContent = 'Add Listing';
+            addListingModalSubtitle.textContent = "Creates the public listing and the farmer's contact info together, so contact details are never missing.";
+            addListingSubmitBtn.textContent = 'Publish Listing';
+        } else {
+            addListingModalTitle.textContent = 'Sell Your Crop';
+            addListingModalSubtitle.textContent = "Submit your listing for review — it'll go live once approved.";
+            addListingSubmitBtn.textContent = 'Submit for Review';
+        }
+        addListingModal.classList.add('active');
+    });
     document.getElementById('closeAddListingModal')?.addEventListener('click', () => addListingModal.classList.remove('active'));
     addListingModal?.addEventListener('click', (e) => { if (e.target === addListingModal) addListingModal.classList.remove('active'); });
     addListingForm?.addEventListener('submit', handleAddListingSubmit);
