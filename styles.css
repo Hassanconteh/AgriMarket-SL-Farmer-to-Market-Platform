@@ -214,6 +214,29 @@ button { font-family: 'Inter', sans-serif; }
 }
 .auth-divider span { padding: 0 0.75rem; }
 
+/* Toast with an inline action button (e.g. "Resend email") */
+.toast-action {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    justify-content: space-between;
+}
+.toast-action-btn {
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.35);
+    padding: 0.4rem 0.85rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: 0.2s;
+    font-family: inherit;
+}
+.toast-action-btn:hover { background: rgba(255,255,255,0.28); }
+.toast-action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
 .toast-container { position: fixed; bottom: 20px; right: 20px; left: 20px; z-index: 1100; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
 .toast { background: var(--text-main); color: white; padding: 1rem 1.5rem; border-radius: 8px; margin-top: 10px; animation: floatUp 0.3s ease forwards; max-width: 360px; pointer-events: auto; }
 
