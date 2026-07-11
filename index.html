@@ -1293,6 +1293,21 @@
         </div>
 
         <main class="container float-in" style="animation-delay: 0.3s;">
+            <section id="pendingApprovalsSection" class="listings" hidden>
+                <div class="section-header">
+                    <h2>Pending Approvals</h2>
+                    <span id="pendingApprovalsCount" class="text-muted"></span>
+                </div>
+                <div id="pendingApprovalsContainer" class="grid"></div>
+            </section>
+
+            <section id="mySubmissionsSection" class="listings" hidden>
+                <div class="section-header">
+                    <h2>My Listings</h2>
+                </div>
+                <div id="mySubmissionsContainer" class="grid"></div>
+            </section>
+
             <section class="listings">
                 <div class="section-header">
                     <h2>Live Market Listings</h2>
@@ -1377,8 +1392,8 @@
         <div class="modal-content float-in">
             <button class="close-btn" id="closeAddListingModal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
             <form id="addListingForm" class="auth-form active">
-                <h3 style="color: var(--sl-blue); margin-bottom: 0.5rem;">Add Listing</h3>
-                <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1.5rem;">Creates the public listing and the farmer's contact info together, so contact details are never missing.</p>
+                <h3 id="addListingModalTitle" style="color: var(--sl-blue); margin-bottom: 0.5rem;">Add Listing</h3>
+                <p id="addListingModalSubtitle" class="text-muted" style="font-size: 0.9rem; margin-bottom: 1.5rem;">Creates the public listing and the farmer's contact info together, so contact details are never missing.</p>
 
                 <div class="form-group">
                     <label for="listingName">Crop Name</label>
@@ -1416,7 +1431,7 @@
                     <input type="tel" id="listingPhone" placeholder="e.g., +23276123456" required>
                 </div>
 
-                <button type="submit" class="btn-full btn-blue">Publish Listing</button>
+                <button type="submit" id="addListingSubmitBtn" class="btn-full btn-blue">Publish Listing</button>
             </form>
         </div>
     </div>
