@@ -8,7 +8,7 @@ const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213
 // server-side by the Firestore security rules below — this client-side
 // check only controls whether the button/form is shown, it is NOT the
 // actual security boundary.
-const ADMIN_UID = "TYyyC49B3haDvSWQMqM0DbNaL2v1";
+const ADMIN_UID = "Hekzmx48mPXukHAcHzQI1Uq7AWW2";
 
 const landingPage   = document.getElementById('landingPage');
 const dashboardApp  = document.getElementById('dashboardApp');
@@ -1065,7 +1065,8 @@ async function handleAddListingSubmit(e) {
 
         batch.set(doc(db, 'crops', cropRef.id, 'private', 'contact'), {
             farmer_name: farmerName,
-            phone
+            phone,
+            submitted_by: user.uid // denormalized so the Firestore rule can check ownership on create without a get() on the sibling doc (see note below)
         });
 
         await batch.commit();
