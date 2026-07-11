@@ -908,6 +908,29 @@
             border-bottom: 1px solid var(--border);
         }
         .auth-divider span { padding: 0 0.75rem; }
+
+        /* Toast with an inline action button (e.g. "Resend email") */
+        .toast-action {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            justify-content: space-between;
+        }
+        .toast-action-btn {
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.35);
+            padding: 0.4rem 0.85rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: inherit;
+        }
+        .toast-action-btn:hover { background: rgba(255,255,255,0.28); }
+        .toast-action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -1779,7 +1802,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithRedirect, getRedirectResult, sendEmailVerification, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1797,6 +1820,16 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  // Session security: use session-only persistence so a signed-in user is
+  // automatically signed out once the browser (or last open tab) is closed,
+  // rather than staying signed in indefinitely (the Firebase default).
+  // Must be set before any sign-in call happens; since this runs at module
+  // init time, well before any button click can trigger a sign-in, it's
+  // safe not to await it here.
+  setPersistence(auth, browserSessionPersistence).catch((err) => {
+    console.warn('Could not set auth persistence', err);
+  });
+
   // Google Sign-In provider, shared with app.js via window.googleProvider
   // so the "Continue with Google" buttons in the auth modal can use it.
   const googleProvider = new GoogleAuthProvider();
@@ -1813,7 +1846,8 @@
     updateProfile,
     GoogleAuthProvider,
     signInWithRedirect,
-    getRedirectResult
+    getRedirectResult,
+    sendEmailVerification
   };
   window.dbFns = {
     collection,
