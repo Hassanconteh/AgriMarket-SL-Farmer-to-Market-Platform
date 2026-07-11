@@ -72,6 +72,37 @@ function triggerToast(message) {
     setTimeout(() => toast.remove(), 4000);
 }
 
+// A toast with a single action button (e.g. "Resend email"), left on screen
+// longer than a plain toast since it needs to be read and clicked rather
+// than just glanced at.
+function triggerActionToast(message, actionLabel, actionFn) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-action';
+
+    const text = document.createElement('span');
+    text.textContent = message;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-action-btn';
+    btn.textContent = actionLabel;
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Sending…';
+        try {
+            await actionFn();
+        } finally {
+            toast.remove();
+        }
+    });
+
+    toast.appendChild(text);
+    toast.appendChild(btn);
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 10000);
+}
+
 function openModal(tab) {
     authModal.classList.add('active');
     switchTab(tab);
@@ -205,13 +236,20 @@ function renderListings(listings, append = false) {
         // Escape every field before interpolating — listing data comes from
         // Firestore and can be created by any signed-in user, so it must be
         // treated as untrusted input (prevents stored XSS via a malicious
-        // crop name, farmer name, phone number, etc.).
+        // crop name, etc.).
+        //
+        // NOTE: farmer_name and phone are intentionally NOT read from this
+        // document anymore. Firestore security rules can only allow/deny a
+        // whole document, not individual fields, so "sensitive fields
+        // require email verification" has to be enforced by moving those
+        // fields to a separate document — crops/{id}/private/contact — with
+        // its own rule. See handleContactFarmerClick() below, which fetches
+        // that subdocument only after confirming the user is verified.
         const name       = escapeHtml(item.name || 'Unnamed listing');
         const location   = escapeHtml(item.location || '');
         const category   = escapeHtml(item.category || '');
-        const farmerName = escapeHtml(item.farmer_name || '');
-        const phone      = escapeHtml(item.phone || '');
         const imageUrl   = escapeHtml(item.image_url || FALLBACK_IMAGE);
+        const cropId     = escapeHtml(item.id || '');
 
         const card = document.createElement('div');
         card.className = 'card';
@@ -224,15 +262,100 @@ function renderListings(listings, append = false) {
                 </div>
                 <h3 class="card-title">${name}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
-                <div class="card-meta">
-                    ${farmerName ? `<p><i class="fa-solid fa-user"></i> ${farmerName}</p>` : ''}
-                    ${phone ? `<p><i class="fa-solid fa-phone"></i> <a href="tel:${phone}">${phone}</a></p>` : ''}
-                </div>
-                ${phone ? `<button class="btn-contact" onclick="window.location.href='tel:${phone}'"><i class="fa-solid fa-phone"></i> Contact Farmer</button>` : ''}
+                <button type="button" class="btn-contact" data-crop-id="${cropId}"><i class="fa-solid fa-phone"></i> Contact Farmer</button>
             </div>
         `;
+        if (item.id) {
+            card.querySelector('.btn-contact')?.addEventListener('click', (e) => {
+                e.preventDefault();
+                handleContactFarmerClick(item.id);
+            });
+        }
         cropContainer.appendChild(card);
     });
+}
+
+// ===== Email verification gate for contacting farmers =====
+// Farmer contact info (name + phone) lives in a separate, per-crop
+// subdocument — crops/{cropId}/private/contact — rather than on the public
+// crop document. Firestore rules enforce
+// request.auth.token.email_verified == true on reads of that subdocument,
+// so this is a real server-side gate, not just a UI nicety.
+async function handleContactFarmerClick(cropId) {
+    const auth = window.firebaseAuth;
+    const user = auth?.currentUser;
+
+    if (!user) {
+        triggerToast('Please sign in to contact farmers.');
+        return;
+    }
+
+    // Refresh the user's status so our own UI check below isn't working
+    // off stale data (e.g. they verified in another tab since the last
+    // token refresh).
+    try {
+        await user.reload();
+    } catch (err) {
+        console.warn('Could not refresh user status before contact check', err);
+    }
+
+    if (!user.emailVerified) {
+        showVerifyEmailPrompt(user);
+        return;
+    }
+
+    // The Firestore rule reads request.auth.token.email_verified from the
+    // user's ID token, which only auto-refreshes about once an hour. If
+    // they just verified their email, the cached token might still say
+    // false — force a refresh so the upcoming read doesn't get wrongly
+    // denied right after verifying.
+    try {
+        await user.getIdToken(true);
+    } catch (err) {
+        console.warn('Could not refresh ID token before contact check', err);
+    }
+
+    const db = window.firebaseDb;
+    const { doc, getDoc } = window.dbFns;
+
+    try {
+        const contactSnap = await getDoc(doc(db, 'crops', cropId, 'private', 'contact'));
+        if (!contactSnap.exists()) {
+            triggerToast('Contact info is not available for this listing.');
+            return;
+        }
+        const contact = contactSnap.data();
+        const phone = contact.phone;
+        const farmerName = contact.farmer_name;
+
+        if (!phone) {
+            triggerToast('This listing has no phone number on file.');
+            return;
+        }
+
+        if (farmerName) triggerToast(`Connecting you to ${farmerName}…`);
+        window.location.href = `tel:${phone}`;
+    } catch (err) {
+        console.error('Failed to fetch farmer contact info', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
+function showVerifyEmailPrompt(user) {
+    triggerActionToast(
+        'Please verify your email before contacting farmers.',
+        'Resend email',
+        async () => {
+            try {
+                const { sendEmailVerification } = window.authFns;
+                await sendEmailVerification(user);
+                triggerToast('Verification email sent. Check your inbox.');
+            } catch (err) {
+                console.error('Failed to resend verification email', err);
+                triggerToast(mapFirebaseError(err));
+            }
+        }
+    );
 }
 
 function renderPaginationControls(hasMore = false) {
@@ -715,6 +838,46 @@ async function applyFilters() {
     await loadInitialCrops();
 }
 
+// ===== Session security: auto sign-out after inactivity =====
+// Signs the user out automatically after a period with no mouse/keyboard/
+// touch/scroll activity, so a session left open on a shared or public
+// computer doesn't stay signed in indefinitely. The timer only ever runs
+// while someone is actually signed in (started in onAuthStateChanged below);
+// the activity listeners are cheap no-ops otherwise since resetInactivityTimer
+// checks auth.currentUser before scheduling anything.
+const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
+let inactivityTimeoutId = null;
+
+function clearInactivityTimer() {
+    if (inactivityTimeoutId) {
+        clearTimeout(inactivityTimeoutId);
+        inactivityTimeoutId = null;
+    }
+}
+
+function resetInactivityTimer() {
+    clearInactivityTimer();
+    const auth = window.firebaseAuth;
+    if (!auth?.currentUser) return; // nobody signed in — nothing to time out
+
+    inactivityTimeoutId = setTimeout(async () => {
+        try {
+            const { signOut } = window.authFns;
+            await signOut(auth);
+            triggerToast("You've been signed out after 15 minutes of inactivity.");
+        } catch (err) {
+            console.warn('Auto sign-out failed', err);
+        }
+    }, INACTIVITY_LIMIT_MS);
+}
+
+// Attached once, unconditionally — resetInactivityTimer() itself no-ops
+// when nobody is signed in, so there's no need to add/remove these per
+// auth state change.
+['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach((evt) => {
+    document.addEventListener(evt, resetInactivityTimer, { passive: true });
+});
+
 // ===== Google Sign-In =====
 // Uses signInWithRedirect rather than signInWithPopup. A popup requires
 // window.closed checks across a cross-origin boundary, which trips the
@@ -792,7 +955,7 @@ async function initApp() {
 
     const auth = window.firebaseAuth;
     const db = window.firebaseDb;
-    const { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile } = window.authFns;
+    const { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, sendEmailVerification } = window.authFns;
     const { collection, getDocs, doc, setDoc } = window.dbFns;
 
     // Picks up the result of a Google redirect sign-in if the page just
@@ -868,6 +1031,9 @@ async function initApp() {
             // Load initial crops and the notification bar for signed-in user
             await loadInitialCrops();
             loadNotifications();
+
+            // (Re)start the inactivity clock now that someone is signed in.
+            resetInactivityTimer();
         } else {
             // No user
             landingPage.style.display = 'block';
@@ -876,6 +1042,9 @@ async function initApp() {
             readNotificationIdsCache = new Set();
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
             document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
+
+            // No one is signed in anymore — nothing left to time out.
+            clearInactivityTimer();
         }
     });
 
@@ -917,8 +1086,17 @@ async function initApp() {
                 console.warn('Failed to write user profile', err);
             }
 
+            // Send the verification email. Contacting farmers (phone
+            // link / "Contact Farmer" button) is gated on emailVerified,
+            // so new accounts need this before they can reach out to anyone.
+            try {
+                await sendEmailVerification(cred.user);
+            } catch (err) {
+                console.warn('Failed to send verification email', err);
+            }
+
             closeModal();
-            triggerToast('Account created! Please check your email to confirm (if required by your Firebase settings).');
+            triggerToast("Account created! We've sent a verification link to your email — you'll need to verify it before contacting farmers.");
         } catch (err) {
             console.error('Sign up failed', err);
             triggerToast(mapFirebaseError(err));
