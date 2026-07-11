@@ -273,6 +273,8 @@ function renderListings(listings, append = false) {
         const imageUrl   = escapeHtml(item.image_url || FALLBACK_IMAGE);
         const cropId     = escapeHtml(item.id || '');
 
+        const isAdminViewing = window.firebaseAuth?.currentUser?.uid === ADMIN_UID;
+
         const card = document.createElement('div');
         card.className = 'card';
         card.innerHTML = `
@@ -285,6 +287,11 @@ function renderListings(listings, append = false) {
                 <h3 class="card-title">${name}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
                 <button type="button" class="btn-contact" data-crop-id="${cropId}"><i class="fa-solid fa-phone"></i> Contact Farmer</button>
+                ${isAdminViewing ? `
+                <div class="admin-card-actions">
+                    <button type="button" class="btn-manage" data-action="return-to-pending" data-id="${cropId}">Return to Pending</button>
+                    <button type="button" class="btn-delete" data-action="delete" data-id="${cropId}">Delete</button>
+                </div>` : ''}
             </div>
         `;
         if (item.id) {
@@ -292,6 +299,16 @@ function renderListings(listings, append = false) {
                 e.preventDefault();
                 handleContactFarmerClick(item.id);
             });
+            if (isAdminViewing) {
+                card.querySelector('[data-action="return-to-pending"]')?.addEventListener('click', () => {
+                    const comment = window.prompt('Optional note for the farmer on why this was sent back (leave blank to skip):', '');
+                    if (comment === null) return; // cancelled
+                    handleReviewListing(item.id, 'pending', comment, { refreshLive: true });
+                });
+                card.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
+                    handleDeleteListing(item.id, { refreshLive: true });
+                });
+            }
         }
         cropContainer.appendChild(card);
     });
@@ -1134,33 +1151,79 @@ function renderPendingApprovals(items) {
                 <h3 class="card-title">${name}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
                 <p class="text-muted" style="font-size:0.8rem; margin: 0.25rem 0;">Submitted by ${email}</p>
-                <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                <div class="admin-card-actions">
                     <button type="button" class="btn-approve" data-id="${item.id}">Approve</button>
                     <button type="button" class="btn-reject" data-id="${item.id}">Reject</button>
+                    <button type="button" class="btn-delete" data-id="${item.id}">Delete</button>
                 </div>
             </div>
         `;
         card.querySelector('.btn-approve').addEventListener('click', () => handleReviewListing(item.id, 'approved'));
-        card.querySelector('.btn-reject').addEventListener('click', () => handleReviewListing(item.id, 'rejected'));
+        card.querySelector('.btn-reject').addEventListener('click', () => {
+            const comment = window.prompt('Optional reason for rejecting (shown to the farmer):', '');
+            if (comment === null) return; // cancelled
+            handleReviewListing(item.id, 'rejected', comment);
+        });
+        card.querySelector('.btn-delete').addEventListener('click', () => handleDeleteListing(item.id));
         pendingApprovalsContainer.appendChild(card);
     });
 }
 
-async function handleReviewListing(cropId, newStatus) {
+// newStatus: 'approved' | 'rejected' | 'pending' (the last one is used for
+// "return to pending" on an already-live listing sent back for revision).
+// comment is optional admin feedback shown to the farmer in "My Listings".
+// opts.refreshLive additionally reloads the public grid, needed when the
+// action affects a listing that's currently showing there (approve/reject
+// happen from Pending Approvals, where the live grid isn't visible, so
+// they don't need it; return-to-pending happens from the live grid itself).
+async function handleReviewListing(cropId, newStatus, comment = '', opts = {}) {
     const db = window.firebaseDb;
     const { doc, setDoc } = window.dbFns;
     try {
-        // setDoc with merge:true only touches the 'status' field, leaving
-        // the rest of the listing (and the separate private/contact doc)
+        // setDoc with merge:true only touches these fields, leaving the
+        // rest of the listing (and the separate private/contact doc)
         // untouched — matches the Firestore rule, which only allows the
         // admin to update 'crops' docs, not farmers editing their own after
         // submission.
-        await setDoc(doc(db, 'crops', cropId), { status: newStatus }, { merge: true });
-        triggerToast(newStatus === 'approved' ? 'Listing approved and now live.' : 'Listing rejected.');
+        await setDoc(doc(db, 'crops', cropId), {
+            status: newStatus,
+            admin_comment: comment || ''
+        }, { merge: true });
+
+        const messages = {
+            approved: 'Listing approved and now live.',
+            rejected: 'Listing rejected.',
+            pending: 'Listing sent back to pending for revision.'
+        };
+        triggerToast(messages[newStatus] || 'Listing updated.');
+
         await loadPendingApprovals();
-        if (newStatus === 'approved') await loadInitialCrops();
+        if (newStatus === 'approved' || opts.refreshLive) await loadInitialCrops();
     } catch (err) {
         console.error('Failed to update listing status', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
+// Permanently deletes a listing and its private contact doc together.
+// opts.refreshLive additionally reloads the public grid (needed when
+// deleting from a live listing card rather than Pending Approvals).
+async function handleDeleteListing(cropId, opts = {}) {
+    if (!window.confirm('Delete this listing permanently? This cannot be undone.')) return;
+
+    const db = window.firebaseDb;
+    const { doc, writeBatch } = window.dbFns;
+    try {
+        const batch = writeBatch(db);
+        batch.delete(doc(db, 'crops', cropId, 'private', 'contact'));
+        batch.delete(doc(db, 'crops', cropId));
+        await batch.commit();
+
+        triggerToast('Listing deleted.');
+        await loadPendingApprovals();
+        if (opts.refreshLive) await loadInitialCrops();
+    } catch (err) {
+        console.error('Failed to delete listing', err);
         triggerToast(mapFirebaseError(err));
     }
 }
@@ -1199,6 +1262,7 @@ function renderMySubmissions(items) {
         const imageUrl = escapeHtml(item.image_url || FALLBACK_IMAGE);
         const status   = item.status || 'pending';
         const statusLabel = escapeHtml(statusLabels[status] || status);
+        const adminComment = escapeHtml(item.admin_comment || '');
 
         const card = document.createElement('div');
         card.className = 'card';
@@ -1212,6 +1276,7 @@ function renderMySubmissions(items) {
                 </div>
                 <h3 class="card-title">${name}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
+                ${adminComment && (status === 'rejected' || status === 'pending') ? `<p class="admin-comment-note"><i class="fa-solid fa-comment-dots"></i> ${adminComment}</p>` : ''}
             </div>
         `;
         mySubmissionsContainer.appendChild(card);
