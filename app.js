@@ -1276,7 +1276,7 @@ function renderMySubmissions(items) {
                 </div>
                 <h3 class="card-title">${name}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
-                ${adminComment && (status === 'rejected' || status === 'pending') ? `<p class="admin-comment-note"><i class="fa-solid fa-comment-dots"></i> ${adminComment}</p>` : ''}
+                ${adminComment && (status === 'rejected' || status === 'pending') ? `<p class="admin-comment-note"><i class="fa-solid fa-comment-dots"></i> <strong>Admin note:</strong> ${adminComment}</p>` : ''}
             </div>
         `;
         mySubmissionsContainer.appendChild(card);
