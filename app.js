@@ -716,22 +716,46 @@ async function applyFilters() {
 }
 
 // ===== Google Sign-In =====
-// Shared handler for both the "Continue with Google" button on the Sign In
-// tab and the one on the Create Account tab — Google auth doesn't
-// distinguish between signing up and signing in, Firebase just creates the
-// account on first use. On first sign-in we also create a 'users' profile
-// doc, mirroring what the email/password registration flow writes, so
-// getFirstName() and any other code that reads users/{uid} keeps working
-// the same way regardless of which sign-in method someone used.
-async function signInWithGoogleHandler(auth, db) {
+// Uses signInWithRedirect rather than signInWithPopup. A popup requires
+// window.closed checks across a cross-origin boundary, which trips the
+// "Cross-Origin-Opener-Policy policy would block the window.closed call"
+// warning on hosts that send a strict COOP header — and on static hosts
+// like GitHub Pages there's no server config to relax that header. Redirect
+// avoids the popup/COOP interaction entirely (it just navigates the whole
+// page to Google and back) and is also more reliable on mobile browsers
+// that block popups outright.
+
+// Kicks off the redirect — the browser navigates away immediately, so
+// there's nothing to await here. Shared by both the Sign In tab's button
+// and the Create Account tab's button, since Google auth doesn't
+// distinguish signing up from signing in; Firebase creates the account on
+// first use either way.
+function signInWithGoogleHandler(auth) {
+    const { signInWithRedirect } = window.authFns;
+    const provider = window.googleProvider;
+    signInWithRedirect(auth, provider).catch((err) => {
+        console.error('Could not start Google sign-in', err);
+        triggerToast(mapFirebaseError(err));
+    });
+}
+
+// Called once on every page load to pick up the result of a redirect that
+// just completed (the user is bounced back to this same page after
+// approving on Google's side). Resolves to null/no user on a normal page
+// load where no redirect was in flight, so it's safe to call unconditionally.
+// On first sign-in we also create a 'users' profile doc, mirroring what the
+// email/password registration flow writes, so getFirstName() and any other
+// code that reads users/{uid} keeps working the same regardless of which
+// sign-in method someone used.
+async function handleGoogleRedirectResult(auth, db) {
     try {
-        const { signInWithPopup } = window.authFns;
+        const { getRedirectResult } = window.authFns;
         const { doc, getDoc, setDoc } = window.dbFns;
-        const provider = window.googleProvider;
 
-        const result = await signInWithPopup(auth, provider);
+        const result = await getRedirectResult(auth);
+        if (!result || !result.user) return; // no redirect was pending
+
         const user = result.user;
-
         try {
             const profileRef = doc(db, 'users', user.uid);
             const snap = await getDoc(profileRef);
@@ -746,16 +770,12 @@ async function signInWithGoogleHandler(auth, db) {
             console.warn('Failed to write/check user profile for Google sign-in', err);
         }
 
-        landingPage.style.display = "none";
-        dashboardApp.style.display = "block";
-        await loadInitialCrops();
-        closeModal();
+        // onAuthStateChanged (registered in initApp) already handles
+        // showing the dashboard and rendering the navbar once the auth
+        // state resolves, so this just adds a welcome toast on top.
+        const firstName = user.displayName ? user.displayName.trim().split(/\s+/)[0] : '';
+        triggerToast(firstName ? `Welcome, ${firstName}!` : 'Signed in with Google.');
     } catch (err) {
-        // A user closing the Google popup shouldn't be logged as a hard
-        // error — it's a normal, expected outcome.
-        if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
-            return;
-        }
         console.error('Google sign-in failed', err);
         triggerToast(mapFirebaseError(err));
     }
@@ -774,6 +794,12 @@ async function initApp() {
     const db = window.firebaseDb;
     const { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile } = window.authFns;
     const { collection, getDocs, doc, setDoc } = window.dbFns;
+
+    // Picks up the result of a Google redirect sign-in if the page just
+    // loaded after being bounced back from Google. Fires in the background;
+    // onAuthStateChanged below handles showing the dashboard once auth
+    // state resolves, so this doesn't need to block the rest of init.
+    handleGoogleRedirectResult(auth, db);
 
     // Returns a logged-in user from the marketing landing page (reached via
     // a footer link) back to their dashboard.
@@ -825,6 +851,13 @@ async function initApp() {
 
     // Auth state observer
     onAuthStateChanged(auth, async (user) => {
+        // Keeps the hero banner's message in sync with the real auth state.
+        // Without this, logging out while browsing footer/landing content
+        // (the top navbar's Log Out button is always reachable, regardless
+        // of which view is showing) would leave the hero saying "You're
+        // signed in" even after the user had just logged out.
+        window.syncHeroTextForAuthState?.();
+
         if (user) {
             // User is signed in
             landingPage.style.display = 'none';
@@ -911,9 +944,11 @@ async function initApp() {
     });
 
     // Google Sign-In — same handler wired to both the Sign In tab's button
-    // and the Create Account tab's button.
-    document.getElementById('googleSignInBtn')?.addEventListener('click', () => signInWithGoogleHandler(auth, db));
-    document.getElementById('googleSignUpBtn')?.addEventListener('click', () => signInWithGoogleHandler(auth, db));
+    // and the Create Account tab's button. This navigates away from the
+    // page immediately (redirect flow), so there's no modal-closing logic
+    // to run here — the user comes right back to this page once signed in.
+    document.getElementById('googleSignInBtn')?.addEventListener('click', () => signInWithGoogleHandler(auth));
+    document.getElementById('googleSignUpBtn')?.addEventListener('click', () => signInWithGoogleHandler(auth));
 
     // Password reset (send reset email)
     resetForm.addEventListener('submit', async (e) => {
