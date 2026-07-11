@@ -1816,7 +1816,18 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
+  // Analytics is best-effort: ad blockers and tracking-protection extensions
+  // commonly block the underlying gtag/measurement requests, which makes
+  // getAnalytics() throw. Since this ran before getAuth()/getFirestore(),
+  // that throw used to kill the whole module script and window.firebaseAuth
+  // never got set — causing every sign-in attempt (including Google) to
+  // fail with "Firebase did not initialize in time". Wrapping it keeps
+  // auth/db initialization independent of analytics succeeding.
+  try {
+    getAnalytics(app);
+  } catch (err) {
+    console.warn('Analytics failed to initialize (likely blocked by an ad blocker) — continuing without it.', err);
+  }
   const auth = getAuth(app);
   const db = getFirestore(app);
 
