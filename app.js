@@ -879,65 +879,87 @@ function resetInactivityTimer() {
 });
 
 // ===== Google Sign-In =====
-// Uses signInWithRedirect rather than signInWithPopup. A popup requires
-// window.closed checks across a cross-origin boundary, which trips the
-// "Cross-Origin-Opener-Policy policy would block the window.closed call"
-// warning on hosts that send a strict COOP header — and on static hosts
-// like GitHub Pages there's no server config to relax that header. Redirect
-// avoids the popup/COOP interaction entirely (it just navigates the whole
-// page to Google and back) and is also more reliable on mobile browsers
-// that block popups outright.
-
-// Kicks off the redirect — the browser navigates away immediately, so
-// there's nothing to await here. Shared by both the Sign In tab's button
-// and the Create Account tab's button, since Google auth doesn't
-// distinguish signing up from signing in; Firebase creates the account on
-// first use either way.
+// Uses signInWithPopup as the primary method. This app's authDomain
+// (agrimarket-sl.firebaseapp.com) is a different domain from where it's
+// actually hosted (e.g. hassanconteh.github.io), and signInWithRedirect
+// depends on storage being shared between those two domains to hand the
+// signed-in session back to the app after the redirect. Browsers now
+// routinely partition/block that cross-domain storage sharing (Chrome's
+// third-party storage partitioning, Safari ITP, Firefox ETP), which made
+// the redirect flow fail *silently* — Google would confirm sign-in, the
+// page would come back, but no session ever appeared and no error was
+// thrown. signInWithPopup instead passes the result back via postMessage
+// between the popup and this window, which isn't affected by that storage
+// partitioning at all.
+//
+// If the popup itself is blocked (some mobile browsers block popups
+// outright), we fall back to signInWithRedirect rather than leaving the
+// user stuck — it's less reliable here, but better than nothing.
 function signInWithGoogleHandler(auth) {
-    const { signInWithRedirect } = window.authFns;
+    const { signInWithPopup, signInWithRedirect } = window.authFns;
     const provider = window.googleProvider;
-    signInWithRedirect(auth, provider).catch((err) => {
-        console.error('Could not start Google sign-in', err);
+    signInWithPopup(auth, provider).then((result) => {
+        handleGoogleSignInSuccess(result);
+    }).catch((err) => {
+        const popupBlockedCodes = ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment'];
+        if (popupBlockedCodes.includes(err?.code)) {
+            console.warn('Popup sign-in unavailable, falling back to redirect', err);
+            signInWithRedirect(auth, provider).catch((redirectErr) => {
+                console.error('Could not start Google sign-in', redirectErr);
+                triggerToast(mapFirebaseError(redirectErr));
+            });
+            return;
+        }
+        console.error('Google sign-in failed', err);
         triggerToast(mapFirebaseError(err));
     });
+}
+
+// Shared success handler for both signInWithPopup and signInWithRedirect.
+// On first sign-in we also create a 'users' profile doc, mirroring what the
+// email/password registration flow writes, so getFirstName() and any other
+// code that reads users/{uid} keeps working the same regardless of which
+// sign-in method someone used. Needs window.firebaseDb, so it's safe to
+// call once initApp has run (both call sites already require that).
+async function handleGoogleSignInSuccess(result) {
+    if (!result || !result.user) return;
+    const db = window.firebaseDb;
+    const user = result.user;
+
+    try {
+        const { doc, getDoc, setDoc } = window.dbFns;
+        const profileRef = doc(db, 'users', user.uid);
+        const snap = await getDoc(profileRef);
+        if (!snap.exists()) {
+            await setDoc(profileRef, {
+                full_name: user.displayName || '',
+                email: user.email || '',
+                created_at: new Date().toISOString()
+            });
+        }
+    } catch (err) {
+        console.warn('Failed to write/check user profile for Google sign-in', err);
+    }
+
+    // onAuthStateChanged (registered in initApp) already handles showing
+    // the dashboard and rendering the navbar once the auth state resolves,
+    // so this just adds a welcome toast on top.
+    const firstName = user.displayName ? user.displayName.trim().split(/\s+/)[0] : '';
+    triggerToast(firstName ? `Welcome, ${firstName}!` : 'Signed in with Google.');
 }
 
 // Called once on every page load to pick up the result of a redirect that
 // just completed (the user is bounced back to this same page after
 // approving on Google's side). Resolves to null/no user on a normal page
-// load where no redirect was in flight, so it's safe to call unconditionally.
-// On first sign-in we also create a 'users' profile doc, mirroring what the
-// email/password registration flow writes, so getFirstName() and any other
-// code that reads users/{uid} keeps working the same regardless of which
-// sign-in method someone used.
+// load where no redirect was in flight (or if the primary popup flow was
+// used instead), so it's safe to call unconditionally. This only remains
+// as a fallback path for the rare case where signInWithPopup itself was
+// blocked and signInWithGoogleHandler fell back to signInWithRedirect.
 async function handleGoogleRedirectResult(auth, db) {
     try {
         const { getRedirectResult } = window.authFns;
-        const { doc, getDoc, setDoc } = window.dbFns;
-
         const result = await getRedirectResult(auth);
-        if (!result || !result.user) return; // no redirect was pending
-
-        const user = result.user;
-        try {
-            const profileRef = doc(db, 'users', user.uid);
-            const snap = await getDoc(profileRef);
-            if (!snap.exists()) {
-                await setDoc(profileRef, {
-                    full_name: user.displayName || '',
-                    email: user.email || '',
-                    created_at: new Date().toISOString()
-                });
-            }
-        } catch (err) {
-            console.warn('Failed to write/check user profile for Google sign-in', err);
-        }
-
-        // onAuthStateChanged (registered in initApp) already handles
-        // showing the dashboard and rendering the navbar once the auth
-        // state resolves, so this just adds a welcome toast on top.
-        const firstName = user.displayName ? user.displayName.trim().split(/\s+/)[0] : '';
-        triggerToast(firstName ? `Welcome, ${firstName}!` : 'Signed in with Google.');
+        await handleGoogleSignInSuccess(result);
     } catch (err) {
         console.error('Google sign-in failed', err);
         triggerToast(mapFirebaseError(err));
