@@ -1354,6 +1354,46 @@ function subscribeToChats(uid) {
     });
 }
 
+// --- Small presentation helpers for the chat UI ---
+const CHAT_AVATAR_COLORS = ['#0072c6', '#15803d', '#b45309', '#7c3aed', '#be185d', '#0f766e'];
+function getChatAvatarColor(seed) {
+    const str = String(seed || '?');
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    return CHAT_AVATAR_COLORS[Math.abs(hash) % CHAT_AVATAR_COLORS.length];
+}
+function getChatInitials(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+function chatAvatarHtml(name, seed) {
+    return `<div class="chat-avatar-circle" style="background:${getChatAvatarColor(seed || name)}">${escapeHtml(getChatInitials(name))}</div>`;
+}
+// Compact relative time for the conversation list (e.g. "5m", "Yesterday").
+function formatChatListTime(iso) {
+    if (!iso) return '';
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return '';
+    const now = new Date();
+    const diffMin = Math.floor((now - date) / 60000);
+    if (diffMin < 1) return 'now';
+    if (diffMin < 60) return `${diffMin}m`;
+    if (date.toDateString() === now.toDateString()) return `${Math.floor(diffMin / 60)}h`;
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    if (diffMin < 60 * 24 * 7) return date.toLocaleDateString(undefined, { weekday: 'short' });
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+// Full clock time for individual message bubbles (e.g. "10:24 AM").
+function formatChatMessageTime(iso) {
+    if (!iso) return '';
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 function unsubscribeFromChats() {
     if (chatsUnsubscribe) { chatsUnsubscribe(); chatsUnsubscribe = null; }
     if (threadUnsubscribe) { threadUnsubscribe(); threadUnsubscribe = null; }
@@ -1375,8 +1415,14 @@ function updateChatBadge(uid) {
 
 function openMessagesModal() {
     if (!messagesModal) return;
+    const chatEmptyState = document.getElementById('chatEmptyState');
+    // Always land back on the conversation list when the modal is (re)opened
+    // — on mobile this is the only view anyway; on desktop the sidebar is
+    // visible regardless (see the [hidden] override in the >=720px media
+    // query), so this mainly resets the main pane back to the placeholder.
     chatListView.hidden = false;
     chatThreadView.hidden = true;
+    if (chatEmptyState) chatEmptyState.hidden = false;
     if (threadUnsubscribe) { threadUnsubscribe(); threadUnsubscribe = null; }
     activeChatId = null;
 
@@ -1394,24 +1440,33 @@ function closeMessagesModal() {
 function renderChatList(uid) {
     if (!chatListContainer) return;
     if (!cachedChats.length) {
-        chatListContainer.innerHTML = '<p class="text-muted">No conversations yet.</p>';
+        chatListContainer.innerHTML = '<div class="chat-list-empty"><i class="fa-regular fa-comment"></i><p>No conversations yet</p></div>';
         return;
     }
     chatListContainer.innerHTML = '';
     cachedChats.forEach((chat) => {
         const otherUid = (chat.participants || []).find((p) => p !== uid);
         const fallbackLabel = chat.type === 'support' ? 'Support' : 'User';
-        const otherLabel = escapeHtml((chat.participant_labels && chat.participant_labels[otherUid]) || fallbackLabel);
+        const otherLabelRaw = (chat.participant_labels && chat.participant_labels[otherUid]) || fallbackLabel;
+        const otherLabel = escapeHtml(otherLabelRaw);
         const isUnread = Array.isArray(chat.unread_by) && chat.unread_by.includes(uid);
+        const isActive = chat.id === activeChatId;
         const lastMsg = escapeHtml(chat.last_message || 'No messages yet');
         const contextLabel = chat.type === 'listing' && chat.crop_name ? escapeHtml(chat.crop_name) : (chat.type === 'support' ? 'Support' : '');
+        const timeLabel = escapeHtml(formatChatListTime(chat.last_message_at));
 
         const row = document.createElement('button');
         row.type = 'button';
-        row.className = 'chat-list-item' + (isUnread ? ' chat-list-item-unread' : '');
+        row.className = 'chat-list-item'
+            + (isUnread ? ' chat-list-item-unread' : '')
+            + (isActive ? ' chat-list-item-active' : '');
         row.innerHTML = `
+            ${chatAvatarHtml(otherLabelRaw, otherUid || chat.id)}
             <div class="chat-list-item-main">
-                <span class="chat-list-item-name">${otherLabel}</span>
+                <div class="chat-list-item-top">
+                    <span class="chat-list-item-name">${otherLabel}</span>
+                    <span class="chat-list-item-time">${timeLabel}</span>
+                </div>
                 ${contextLabel ? `<span class="chat-list-item-context">${contextLabel}</span>` : ''}
                 <span class="chat-list-item-preview">${lastMsg}</span>
             </div>
@@ -1424,8 +1479,10 @@ function renderChatList(uid) {
 
 async function openChatThread(chatId) {
     if (!messagesModal) return;
-    chatListView.hidden = true;
+    const chatEmptyState = document.getElementById('chatEmptyState');
+    chatListView.hidden = true; // mobile: switches away from the list; desktop: overridden to stay visible via CSS
     chatThreadView.hidden = false;
+    if (chatEmptyState) chatEmptyState.hidden = true;
     activeChatId = chatId;
 
     const uid = window.firebaseAuth?.currentUser?.uid;
@@ -1433,9 +1490,16 @@ async function openChatThread(chatId) {
     const otherUid = chatMeta ? (chatMeta.participants || []).find((p) => p !== uid) : null;
     const otherLabel = (chatMeta?.participant_labels && chatMeta.participant_labels[otherUid]) || (chatMeta?.type === 'support' ? 'Support' : 'User');
     chatThreadTitle.textContent = otherLabel;
+    const chatThreadAvatar = document.getElementById('chatThreadAvatar');
+    if (chatThreadAvatar) chatThreadAvatar.innerHTML = chatAvatarHtml(otherLabel, otherUid || chatId);
     chatThreadSubtitle.textContent = chatMeta?.type === 'listing' && chatMeta.crop_name
         ? `About: ${chatMeta.crop_name}`
         : (chatMeta?.type === 'support' ? 'Support conversation' : '');
+
+    // Refresh the list now so the newly-opened conversation gets the
+    // active-state highlight immediately (relevant on desktop, where the
+    // sidebar stays visible alongside the thread).
+    renderChatList(uid);
 
     // Mark as read — removing our own uid from unread_by. Harmless if we're
     // already not in the array.
@@ -1466,16 +1530,26 @@ function renderChatMessages(msgs, uid) {
     if (!chatMessagesContainer) return;
     chatMessagesContainer.innerHTML = '';
     if (!msgs.length) {
-        chatMessagesContainer.innerHTML = '<p class="text-muted">Say hello 👋</p>';
+        chatMessagesContainer.innerHTML = '<div class="chat-messages-empty"><i class="fa-regular fa-comment-dots"></i><p>Say hello 👋</p></div>';
         return;
     }
     msgs.forEach((m) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'chat-bubble-wrapper ' + (m.sender_id === uid ? 'chat-bubble-wrapper-mine' : 'chat-bubble-wrapper-theirs');
+
         const bubble = document.createElement('div');
         // textContent (not innerHTML) so message text never needs
         // escaping — it can't be interpreted as markup either way.
         bubble.className = 'chat-bubble ' + (m.sender_id === uid ? 'chat-bubble-mine' : 'chat-bubble-theirs');
         bubble.textContent = m.text || '';
-        chatMessagesContainer.appendChild(bubble);
+
+        const time = document.createElement('span');
+        time.className = 'chat-bubble-time';
+        time.textContent = formatChatMessageTime(m.created_at);
+
+        wrapper.appendChild(bubble);
+        wrapper.appendChild(time);
+        chatMessagesContainer.appendChild(wrapper);
     });
     chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
 }
@@ -1850,6 +1924,8 @@ async function initApp() {
         activeChatId = null;
         chatThreadView.hidden = true;
         chatListView.hidden = false;
+        const chatEmptyState = document.getElementById('chatEmptyState');
+        if (chatEmptyState) chatEmptyState.hidden = false;
         renderChatList(window.firebaseAuth?.currentUser?.uid);
     });
     chatMessageForm?.addEventListener('submit', handleSendChatMessage);
