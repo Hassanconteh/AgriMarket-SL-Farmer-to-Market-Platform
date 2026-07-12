@@ -1462,7 +1462,14 @@
 
     <div id="messagesModal" class="modal-overlay">
         <div class="modal-content float-in chat-modal">
-            <button class="close-btn" id="closeMessagesModal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            <div class="chat-window-titlebar">
+                <span class="chat-window-title"><i class="fa-solid fa-comment-dots"></i> Messages</span>
+                <div class="chat-window-controls">
+                    <button type="button" class="chat-win-btn" id="chatMinimizeBtn" aria-label="Minimize"><i class="fa-solid fa-minus"></i></button>
+                    <button type="button" class="chat-win-btn" id="chatMaximizeBtn" aria-label="Maximize"><i class="fa-solid fa-expand"></i></button>
+                    <button type="button" class="chat-win-btn chat-win-btn-close" id="closeMessagesModal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
 
             <div class="chat-modal-body">
                 <div id="chatListView" class="chat-pane">
