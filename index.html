@@ -1370,6 +1370,12 @@
                     </div>
                     <input type="password" id="loginPassword" autocomplete="current-password" required>
                 </div>
+                <div class="form-group form-group-checkbox">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="rememberMeCheckbox">
+                        Remember me
+                    </label>
+                </div>
                 <button type="submit" class="btn-full btn-blue">Sign In</button>
             </form>
 
@@ -1940,7 +1946,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendEmailVerification, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendEmailVerification, setPersistence, browserSessionPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, writeBatch, onSnapshot, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
   import { getDatabase, ref, set, remove, onValue, onDisconnect, serverTimestamp as rtdbServerTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
@@ -2021,7 +2027,10 @@
         signInWithPopup,
         signInWithRedirect,
         getRedirectResult,
-        sendEmailVerification
+        sendEmailVerification,
+        setPersistence,
+        browserSessionPersistence,
+        browserLocalPersistence
       };
       window.dbFns = {
         collection,
