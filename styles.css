@@ -189,16 +189,83 @@ button { font-family: 'Inter', sans-serif; }
     padding: 0;
     overflow: hidden;
     display: flex;
+    flex-direction: column;
     /* vh fallback first for older browsers, dvh second so modern mobile
        browsers size against the *actual* visible viewport (address bar
        collapsed or not) instead of overshooting/cutting off the layout */
     height: 78vh;
     height: 78dvh;
     max-height: 680px;
+    transition: width 0.2s ease, height 0.2s ease, border-radius 0.2s ease;
 }
-.chat-modal .close-btn { z-index: 5; background: rgba(255,255,255,0.9); }
-.chat-modal-body { display: flex; flex-direction: column; width: 100%; min-height: 0; }
+
+/* --- Title bar with minimize / maximize / close controls --- */
+.chat-window-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.8rem 1.1rem;
+    background: var(--sl-blue);
+    color: white;
+    flex-shrink: 0;
+    cursor: default;
+}
+.chat-window-title { font-weight: 700; font-size: 0.92rem; display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
+.chat-window-controls { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; }
+.chat-win-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    font-size: 0.78rem;
+    transition: background 0.15s;
+}
+.chat-win-btn:hover { background: rgba(255,255,255,0.3); }
+.chat-win-btn-close:hover { background: #dc2626; }
+
+/* Maximize: force true full-view regardless of screen size, on demand */
+#messagesModal.chat-maximized .chat-modal {
+    width: 100vw !important;
+    width: 100dvw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+}
+
+/* Minimize: collapse to just the title bar, docked bottom-right, like a
+   real messaging widget — the rest of the page stays fully usable. */
+#messagesModal.chat-minimized {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    align-items: flex-end !important;
+    justify-content: flex-end !important;
+    padding: 1.25rem !important;
+    pointer-events: none !important;
+}
+#messagesModal.chat-minimized .chat-modal {
+    pointer-events: auto;
+    width: 300px !important;
+    max-width: 300px !important;
+    height: auto !important;
+    max-height: none !important;
+    border-radius: 14px !important;
+    box-shadow: 0 10px 40px rgba(15, 23, 42, 0.25);
+}
+#messagesModal.chat-minimized .chat-modal-body { display: none; }
+#messagesModal.chat-minimized .chat-window-titlebar { cursor: pointer; }
+.chat-modal-body { display: flex; flex-direction: column; width: 100%; min-height: 0; flex: 1; }
 .chat-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; height: 100%; }
+.chat-pane[hidden] { display: none; }
 
 /* --- List pane --- */
 #chatListView { padding: 1.4rem 1.1rem 1rem; }
@@ -248,13 +315,14 @@ button { font-family: 'Inter', sans-serif; }
 .chat-send-btn:hover { background: #005a9e; }
 
 .chat-empty-state { display: none; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; color: var(--text-muted); text-align: center; }
+.chat-empty-state:not([hidden]) { display: flex; }
 .chat-empty-state i { font-size: 2.4rem; opacity: 0.35; }
 .chat-empty-state p { font-size: 0.9rem; margin: 0; }
 
 /* --- Desktop: persistent sidebar + main pane side by side --- */
 @media (min-width: 720px) {
     .chat-modal { width: 90%; }
-    .chat-modal-body { display: grid; grid-template-columns: 280px minmax(0, 1fr); }
+    .chat-modal-body { display: grid; grid-template-columns: minmax(200px, 30%) minmax(0, 1fr); }
     #chatListView { grid-column: 1; grid-row: 1; border-right: 1px solid #e2e8f0; }
     #chatListView[hidden] { display: flex !important; }
     #chatThreadView { grid-column: 2; grid-row: 1; border-top: none; }
@@ -274,9 +342,6 @@ button { font-family: 'Inter', sans-serif; }
         border-radius: 0;
         padding-top: env(safe-area-inset-top);
         padding-bottom: env(safe-area-inset-bottom);
-    }
-    #messagesModal .chat-modal .close-btn {
-        top: calc(1rem + env(safe-area-inset-top));
     }
 }
 /* Short viewports (e.g. phone in landscape) — cap by height, not just width,
