@@ -35,6 +35,26 @@ const pendingApprovalsCount     = document.getElementById('pendingApprovalsCount
 const mySubmissionsSection   = document.getElementById('mySubmissionsSection');
 const mySubmissionsContainer = document.getElementById('mySubmissionsContainer');
 
+const messagesModal        = document.getElementById('messagesModal');
+const chatListView         = document.getElementById('chatListView');
+const chatListContainer    = document.getElementById('chatListContainer');
+const chatThreadView       = document.getElementById('chatThreadView');
+const chatThreadTitle      = document.getElementById('chatThreadTitle');
+const chatThreadSubtitle   = document.getElementById('chatThreadSubtitle');
+const chatMessagesContainer = document.getElementById('chatMessagesContainer');
+const chatMessageForm      = document.getElementById('chatMessageForm');
+const chatMessageInput     = document.getElementById('chatMessageInput');
+
+// Chat state. chatsUnsubscribe listens to the signed-in user's chat list
+// for the whole session (started at sign-in, stopped at sign-out) so the
+// unread badge stays live even when the Messages modal is closed.
+// threadUnsubscribe only listens to whichever single thread is currently
+// open, and gets torn down whenever the thread view closes/changes.
+let chatsUnsubscribe = null;
+let threadUnsubscribe = null;
+let cachedChats = [];
+let activeChatId = null;
+
 const blogContainer    = document.getElementById('blogCardsContainer');
 const blogModal        = document.getElementById('blogModal');
 const blogModalContent = document.getElementById('blogModalContent');
@@ -273,7 +293,12 @@ function renderListings(listings, append = false) {
         const imageUrl   = escapeHtml(item.image_url || FALLBACK_IMAGE);
         const cropId     = escapeHtml(item.id || '');
 
-        const isAdminViewing = window.firebaseAuth?.currentUser?.uid === ADMIN_UID;
+        const currentUid = window.firebaseAuth?.currentUser?.uid;
+        const isAdminViewing = currentUid === ADMIN_UID;
+        // Hide "Message Seller" on your own listing (nothing to message
+        // yourself about) and for signed-out visitors (openOrCreateChat
+        // requires being signed in anyway).
+        const showMessageSeller = currentUid && item.submitted_by && item.submitted_by !== currentUid;
 
         const card = document.createElement('div');
         card.className = 'card';
@@ -287,6 +312,7 @@ function renderListings(listings, append = false) {
                 <h3 class="card-title">${name}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
                 <button type="button" class="btn-contact" data-crop-id="${cropId}"><i class="fa-solid fa-phone"></i> Contact Farmer</button>
+                ${showMessageSeller ? `<button type="button" class="btn-message-seller" data-action="message-seller" data-id="${cropId}"><i class="fa-solid fa-comment-dots"></i> Message Seller</button>` : ''}
                 ${isAdminViewing ? `
                 <div class="admin-card-actions">
                     <button type="button" class="btn-manage" data-action="return-to-pending" data-id="${cropId}">Return to Pending</button>
@@ -294,6 +320,17 @@ function renderListings(listings, append = false) {
                 </div>` : ''}
             </div>
         `;
+        if (showMessageSeller) {
+            card.querySelector('[data-action="message-seller"]')?.addEventListener('click', () => {
+                openOrCreateChat({
+                    otherUid: item.submitted_by,
+                    otherLabel: item.farmer_display_name || 'Farmer',
+                    type: 'listing',
+                    cropId: item.id,
+                    cropName: item.name || 'Listing'
+                });
+            });
+        }
         if (item.id) {
             card.querySelector('.btn-contact')?.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -1077,6 +1114,7 @@ async function handleAddListingSubmit(e) {
             status: isAdmin ? 'approved' : 'pending',
             submitted_by: user.uid,
             submitted_by_email: user.email || '',
+            farmer_display_name: farmerName, // public label for chat — deliberately just the name, phone stays in private/contact
             created_at: new Date().toISOString()
         });
 
@@ -1283,6 +1321,244 @@ function renderMySubmissions(items) {
     });
 }
 
+// ===== Chat / Messages =====
+// Data model:
+//   chats/{chatId}: { participants: [uid, uid], participant_labels: {uid: name},
+//     type: 'listing' | 'support', crop_id, crop_name, last_message,
+//     last_message_at, last_sender_id, unread_by: [uid, ...], created_at }
+//   chats/{chatId}/messages/{messageId}: { sender_id, text, created_at }
+//
+// Chat IDs are deterministic rather than randomly generated, so opening an
+// existing conversation never creates a duplicate:
+//   - listing chats: `listing_${cropId}_${buyerUid}` (one thread per buyer
+//     per listing; the farmer side is whoever submitted that crop)
+//   - support chats: `support_${uid}` (one thread per user with the admin)
+
+// Starts (or restarts) a live subscription to every chat the signed-in
+// user is part of. Kept running for the whole session so the unread badge
+// updates in real time even while the Messages modal is closed.
+function subscribeToChats(uid) {
+    if (chatsUnsubscribe) { chatsUnsubscribe(); chatsUnsubscribe = null; }
+    const db = window.firebaseDb;
+    const { collection, query, where, orderBy, onSnapshot } = window.dbFns;
+
+    const q = query(collection(db, 'chats'), where('participants', 'array-contains', uid), orderBy('last_message_at', 'desc'));
+    chatsUnsubscribe = onSnapshot(q, (snap) => {
+        cachedChats = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        updateChatBadge(uid);
+        if (messagesModal?.classList.contains('active') && !chatListView.hidden) {
+            renderChatList(uid);
+        }
+    }, (err) => {
+        console.error('Chat list listener failed', err);
+    });
+}
+
+function unsubscribeFromChats() {
+    if (chatsUnsubscribe) { chatsUnsubscribe(); chatsUnsubscribe = null; }
+    if (threadUnsubscribe) { threadUnsubscribe(); threadUnsubscribe = null; }
+    cachedChats = [];
+    activeChatId = null;
+}
+
+function updateChatBadge(uid) {
+    const chatBadge = document.getElementById('chatBadge');
+    if (!chatBadge) return;
+    const unreadCount = cachedChats.filter((c) => Array.isArray(c.unread_by) && c.unread_by.includes(uid)).length;
+    if (unreadCount > 0) {
+        chatBadge.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+        chatBadge.hidden = false;
+    } else {
+        chatBadge.hidden = true;
+    }
+}
+
+function openMessagesModal() {
+    if (!messagesModal) return;
+    chatListView.hidden = false;
+    chatThreadView.hidden = true;
+    if (threadUnsubscribe) { threadUnsubscribe(); threadUnsubscribe = null; }
+    activeChatId = null;
+
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    renderChatList(uid);
+    messagesModal.classList.add('active');
+}
+
+function closeMessagesModal() {
+    if (threadUnsubscribe) { threadUnsubscribe(); threadUnsubscribe = null; }
+    activeChatId = null;
+    messagesModal?.classList.remove('active');
+}
+
+function renderChatList(uid) {
+    if (!chatListContainer) return;
+    if (!cachedChats.length) {
+        chatListContainer.innerHTML = '<p class="text-muted">No conversations yet.</p>';
+        return;
+    }
+    chatListContainer.innerHTML = '';
+    cachedChats.forEach((chat) => {
+        const otherUid = (chat.participants || []).find((p) => p !== uid);
+        const fallbackLabel = chat.type === 'support' ? 'Support' : 'User';
+        const otherLabel = escapeHtml((chat.participant_labels && chat.participant_labels[otherUid]) || fallbackLabel);
+        const isUnread = Array.isArray(chat.unread_by) && chat.unread_by.includes(uid);
+        const lastMsg = escapeHtml(chat.last_message || 'No messages yet');
+        const contextLabel = chat.type === 'listing' && chat.crop_name ? escapeHtml(chat.crop_name) : (chat.type === 'support' ? 'Support' : '');
+
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'chat-list-item' + (isUnread ? ' chat-list-item-unread' : '');
+        row.innerHTML = `
+            <div class="chat-list-item-main">
+                <span class="chat-list-item-name">${otherLabel}</span>
+                ${contextLabel ? `<span class="chat-list-item-context">${contextLabel}</span>` : ''}
+                <span class="chat-list-item-preview">${lastMsg}</span>
+            </div>
+            ${isUnread ? '<span class="chat-list-item-dot"></span>' : ''}
+        `;
+        row.addEventListener('click', () => openChatThread(chat.id));
+        chatListContainer.appendChild(row);
+    });
+}
+
+async function openChatThread(chatId) {
+    if (!messagesModal) return;
+    chatListView.hidden = true;
+    chatThreadView.hidden = false;
+    activeChatId = chatId;
+
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    const chatMeta = cachedChats.find((c) => c.id === chatId);
+    const otherUid = chatMeta ? (chatMeta.participants || []).find((p) => p !== uid) : null;
+    const otherLabel = (chatMeta?.participant_labels && chatMeta.participant_labels[otherUid]) || (chatMeta?.type === 'support' ? 'Support' : 'User');
+    chatThreadTitle.textContent = otherLabel;
+    chatThreadSubtitle.textContent = chatMeta?.type === 'listing' && chatMeta.crop_name
+        ? `About: ${chatMeta.crop_name}`
+        : (chatMeta?.type === 'support' ? 'Support conversation' : '');
+
+    // Mark as read — removing our own uid from unread_by. Harmless if we're
+    // already not in the array.
+    try {
+        const db = window.firebaseDb;
+        const { doc, setDoc, arrayRemove } = window.dbFns;
+        await setDoc(doc(db, 'chats', chatId), { unread_by: arrayRemove(uid) }, { merge: true });
+    } catch (err) {
+        console.warn('Could not mark chat as read', err);
+    }
+
+    if (threadUnsubscribe) { threadUnsubscribe(); threadUnsubscribe = null; }
+    const db = window.firebaseDb;
+    const { collection, query, orderBy, onSnapshot } = window.dbFns;
+    chatMessagesContainer.innerHTML = '<p class="text-muted">Loading…</p>';
+
+    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('created_at', 'asc'));
+    threadUnsubscribe = onSnapshot(q, (snap) => {
+        const msgs = snap.docs.map((d) => d.data());
+        renderChatMessages(msgs, uid);
+    }, (err) => {
+        console.error('Message listener failed', err);
+        chatMessagesContainer.innerHTML = '<p class="text-muted">Could not load messages.</p>';
+    });
+}
+
+function renderChatMessages(msgs, uid) {
+    if (!chatMessagesContainer) return;
+    chatMessagesContainer.innerHTML = '';
+    if (!msgs.length) {
+        chatMessagesContainer.innerHTML = '<p class="text-muted">Say hello 👋</p>';
+        return;
+    }
+    msgs.forEach((m) => {
+        const bubble = document.createElement('div');
+        // textContent (not innerHTML) so message text never needs
+        // escaping — it can't be interpreted as markup either way.
+        bubble.className = 'chat-bubble ' + (m.sender_id === uid ? 'chat-bubble-mine' : 'chat-bubble-theirs');
+        bubble.textContent = m.text || '';
+        chatMessagesContainer.appendChild(bubble);
+    });
+    chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+}
+
+async function handleSendChatMessage(e) {
+    e.preventDefault();
+    const text = chatMessageInput.value.trim();
+    if (!text || !activeChatId) return;
+
+    const auth = window.firebaseAuth;
+    const user = auth?.currentUser;
+    if (!user) return;
+
+    const db = window.firebaseDb;
+    const { collection, doc, setDoc, arrayUnion } = window.dbFns;
+
+    chatMessageInput.value = '';
+    try {
+        const msgRef = doc(collection(db, 'chats', activeChatId, 'messages'));
+        await setDoc(msgRef, { sender_id: user.uid, text, created_at: new Date().toISOString() });
+
+        const chatMeta = cachedChats.find((c) => c.id === activeChatId);
+        const otherUid = chatMeta ? (chatMeta.participants || []).find((p) => p !== user.uid) : null;
+
+        const updatePayload = {
+            last_message: text,
+            last_message_at: new Date().toISOString(),
+            last_sender_id: user.uid
+        };
+        if (otherUid) updatePayload.unread_by = arrayUnion(otherUid);
+
+        await setDoc(doc(db, 'chats', activeChatId), updatePayload, { merge: true });
+    } catch (err) {
+        console.error('Failed to send message', err);
+        triggerToast(mapFirebaseError(err));
+        chatMessageInput.value = text; // restore so nothing is lost
+    }
+}
+
+// Looks up (or creates, on first contact) the deterministic chat doc for a
+// listing conversation or a support conversation, then opens it directly.
+async function openOrCreateChat({ otherUid, otherLabel, type, cropId = null, cropName = null }) {
+    const auth = window.firebaseAuth;
+    const user = auth?.currentUser;
+    if (!user) {
+        triggerToast('Please sign in first.');
+        return;
+    }
+    if (!user.emailVerified) {
+        showVerifyEmailPrompt(user);
+        return;
+    }
+
+    const db = window.firebaseDb;
+    const { doc, getDoc, setDoc } = window.dbFns;
+    const chatId = type === 'support' ? `support_${user.uid}` : `listing_${cropId}_${user.uid}`;
+
+    try {
+        const chatRef = doc(db, 'chats', chatId);
+        const snap = await getDoc(chatRef);
+        if (!snap.exists()) {
+            const myLabel = await getFirstName(user) || user.email || 'User';
+            await setDoc(chatRef, {
+                participants: [user.uid, otherUid],
+                participant_labels: { [user.uid]: myLabel, [otherUid]: otherLabel },
+                type,
+                crop_id: cropId,
+                crop_name: cropName,
+                last_message: '',
+                last_message_at: new Date().toISOString(),
+                last_sender_id: '',
+                unread_by: [],
+                created_at: new Date().toISOString()
+            });
+        }
+        openMessagesModal();
+        await openChatThread(chatId);
+    } catch (err) {
+        console.error('Failed to open chat', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
 async function initApp() {
     try {
         await waitForFirebase();
@@ -1320,7 +1596,15 @@ async function initApp() {
     // doesn't trigger onAuthStateChanged again on its own).
     async function renderAuthedNav(user) {
         const firstName = escapeHtml(await getFirstName(user));
+        const isAdmin = user.uid === ADMIN_UID;
         navMenu.innerHTML = `
+            ${!isAdmin ? '<button id="navSupportBtn" class="btn-outline" title="Contact Support"><i class="fa-solid fa-headset"></i> Support</button>' : ''}
+            <div class="notif-wrapper">
+                <button id="chatBellBtn" class="notif-bell-btn" type="button" aria-label="Messages">
+                    <i class="fa-solid fa-comment-dots"></i>
+                    <span id="chatBadge" class="notif-badge" hidden>0</span>
+                </button>
+            </div>
             <div class="notif-wrapper">
                 <button id="notifBellBtn" class="notif-bell-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Notifications">
                     <i class="fa-solid fa-bell"></i>
@@ -1340,6 +1624,10 @@ async function initApp() {
         `;
         document.getElementById('navDashboardBtn').addEventListener('click', showDashboardView);
         setupNotificationBell();
+        document.getElementById('chatBellBtn').addEventListener('click', () => openMessagesModal());
+        document.getElementById('navSupportBtn')?.addEventListener('click', () => {
+            openOrCreateChat({ otherUid: ADMIN_UID, otherLabel: 'Support', type: 'support' });
+        });
         document.getElementById('navLogoutBtn').addEventListener('click', async () => {
             try {
                 await signOut(auth);
@@ -1402,6 +1690,7 @@ async function initApp() {
             // Load initial crops and the notification bar for signed-in user
             await loadInitialCrops();
             loadNotifications();
+            subscribeToChats(user.uid);
 
             // (Re)start the inactivity clock now that someone is signed in.
             resetInactivityTimer();
@@ -1412,6 +1701,8 @@ async function initApp() {
             if (addListingBtn) addListingBtn.hidden = true;
             if (pendingApprovalsSection) pendingApprovalsSection.hidden = true;
             if (mySubmissionsSection) mySubmissionsSection.hidden = true;
+            unsubscribeFromChats();
+            closeMessagesModal();
             currentNotifications = [];
             readNotificationIdsCache = new Set();
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
@@ -1550,6 +1841,18 @@ async function initApp() {
     document.getElementById('closeAddListingModal')?.addEventListener('click', () => addListingModal.classList.remove('active'));
     addListingModal?.addEventListener('click', (e) => { if (e.target === addListingModal) addListingModal.classList.remove('active'); });
     addListingForm?.addEventListener('submit', handleAddListingSubmit);
+
+    // Messages modal
+    document.getElementById('closeMessagesModal')?.addEventListener('click', closeMessagesModal);
+    messagesModal?.addEventListener('click', (e) => { if (e.target === messagesModal) closeMessagesModal(); });
+    document.getElementById('chatBackBtn')?.addEventListener('click', () => {
+        if (threadUnsubscribe) { threadUnsubscribe(); threadUnsubscribe = null; }
+        activeChatId = null;
+        chatThreadView.hidden = true;
+        chatListView.hidden = false;
+        renderChatList(window.firebaseAuth?.currentUser?.uid);
+    });
+    chatMessageForm?.addEventListener('submit', handleSendChatMessage);
 
     // Blog posts are public marketing content, so load them regardless of
     // sign-in state (unlike crop listings, which only load once a user is
