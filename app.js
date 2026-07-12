@@ -1429,13 +1429,50 @@ function openMessagesModal() {
     const uid = window.firebaseAuth?.currentUser?.uid;
     renderChatList(uid);
     messagesModal.classList.add('active');
+    messagesModal.classList.remove('chat-maximized', 'chat-minimized');
+    setChatMaximizeIcon(false);
 }
 
 function closeMessagesModal() {
     if (threadUnsubscribe) { threadUnsubscribe(); threadUnsubscribe = null; }
     activeChatId = null;
-    messagesModal?.classList.remove('active');
+    messagesModal?.classList.remove('active', 'chat-maximized', 'chat-minimized');
 }
+
+// Window controls — minimize collapses the chat to a small docked bar
+// (like a real messaging widget) without losing the conversation; maximize
+// forces a true full-viewport view regardless of screen size, useful when
+// the default modal feels cramped. Only one state applies at a time.
+function setChatMaximizeIcon(isMaximized) {
+    const btn = document.getElementById('chatMaximizeBtn');
+    if (!btn) return;
+    btn.innerHTML = isMaximized ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
+    btn.setAttribute('aria-label', isMaximized ? 'Restore' : 'Maximize');
+}
+
+document.getElementById('chatMinimizeBtn')?.addEventListener('click', () => {
+    if (!messagesModal) return;
+    const nowMinimized = messagesModal.classList.toggle('chat-minimized');
+    if (nowMinimized) {
+        messagesModal.classList.remove('chat-maximized');
+        setChatMaximizeIcon(false);
+    }
+});
+
+document.getElementById('chatMaximizeBtn')?.addEventListener('click', () => {
+    if (!messagesModal) return;
+    const nowMaximized = messagesModal.classList.toggle('chat-maximized');
+    if (nowMaximized) messagesModal.classList.remove('chat-minimized');
+    setChatMaximizeIcon(nowMaximized);
+});
+
+// While minimized, clicking anywhere on the title bar (but not its buttons)
+// restores the window — matches how real minimized chat widgets behave.
+document.querySelector('#messagesModal .chat-window-titlebar')?.addEventListener('click', (e) => {
+    if (!messagesModal?.classList.contains('chat-minimized')) return;
+    if (e.target.closest('.chat-win-btn')) return;
+    messagesModal.classList.remove('chat-minimized');
+});
 
 function renderChatList(uid) {
     if (!chatListContainer) return;
