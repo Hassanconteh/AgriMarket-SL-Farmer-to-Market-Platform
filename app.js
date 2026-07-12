@@ -54,6 +54,7 @@ let chatsUnsubscribe = null;
 let threadUnsubscribe = null;
 let cachedChats = [];
 let activeChatId = null;
+let currentPresenceUid = null;
 
 const blogContainer    = document.getElementById('blogCardsContainer');
 const blogModal        = document.getElementById('blogModal');
@@ -1504,7 +1505,127 @@ function updateChatEncryptionBadge(isEncrypted) {
         : 'Not yet encrypted — waiting for the other person to open the app at least once';
 }
 
+// ===== Presence & typing (Realtime Database) =====
+// Uses Realtime Database rather than Firestore because RTDB has native
+// onDisconnect() support: the server itself (not the client) writes the
+// "offline" state the moment a connection drops — tab closed, network
+// lost, laptop put to sleep — with no heartbeat or polling needed. This
+// degrades gracefully to "no presence info" if RTDB isn't configured
+// (databaseURL missing/wrong, or the database not yet enabled in the
+// Firebase console) — see rtdbReady() below.
+//
+// Data model:
+//   status/{uid}: { state: 'online' | 'offline', last_changed: <server ts> }
+//   typing/{chatId}/{uid}: true, present only while that user is actively
+//     typing in that chat; removed on idle timeout, on send, or on
+//     disconnect (via onDisconnect, same as presence).
+const TYPING_IDLE_MS = 3000;
+
+let presenceInfoUnsub = null;      // .info/connected listener (one per session)
+let chatListPresenceUnsubs = [];   // one pair of listeners per visible chat row
+let threadStatusUnsub = null;      // open chat thread's header presence dot
+let threadTypingUnsub = null;      // open chat thread's header "typing…" state
+let typingIdleTimer = null;        // clears MY own typing flag after a pause
+
+function rtdbReady() {
+    return !!(window.firebaseRtdb && window.rtdbFns);
+}
+
+// Called on sign-in. Marks the current user online, and arranges for the
+// server to mark them offline automatically if the connection drops
+// without a clean sign-out (closed tab, lost network, etc).
+function initPresence(uid) {
+    if (!rtdbReady() || !uid) return;
+    const rtdb = window.firebaseRtdb;
+    const { ref, set, onValue, onDisconnect, serverTimestamp } = window.rtdbFns;
+
+    if (presenceInfoUnsub) { presenceInfoUnsub(); presenceInfoUnsub = null; }
+
+    const myStatusRef = ref(rtdb, `status/${uid}`);
+    const connectedRef = ref(rtdb, '.info/connected');
+    presenceInfoUnsub = onValue(connectedRef, (snap) => {
+        if (snap.val() !== true) return; // fires on every (re)connect
+        // Queue up the offline write BEFORE announcing ourselves online, so
+        // there's never a moment where we're online with no cleanup armed.
+        onDisconnect(myStatusRef).set({ state: 'offline', last_changed: serverTimestamp() })
+            .then(() => set(myStatusRef, { state: 'online', last_changed: serverTimestamp() }))
+            .catch((err) => console.warn('Could not set up presence', err));
+    });
+}
+
+// Called on sign-out. Explicit + immediate, rather than waiting for
+// onDisconnect to notice (which is really meant for the ungraceful case).
+function teardownPresence(uid) {
+    if (presenceInfoUnsub) { presenceInfoUnsub(); presenceInfoUnsub = null; }
+    clearChatListPresence();
+    clearThreadPresence();
+    if (rtdbReady() && uid) {
+        const { ref, set, serverTimestamp } = window.rtdbFns;
+        set(ref(window.firebaseRtdb, `status/${uid}`), { state: 'offline', last_changed: serverTimestamp() }).catch(() => {});
+    }
+}
+
+function subscribeToPresence(otherUid, cb) {
+    if (!rtdbReady() || !otherUid) return () => {};
+    const { ref, onValue } = window.rtdbFns;
+    const statusRef = ref(window.firebaseRtdb, `status/${otherUid}`);
+    return onValue(statusRef, (snap) => cb(snap.val()));
+}
+
+function subscribeToTyping(chatId, otherUid, cb) {
+    if (!rtdbReady() || !chatId || !otherUid) return () => {};
+    const { ref, onValue } = window.rtdbFns;
+    const typingRef = ref(window.firebaseRtdb, `typing/${chatId}/${otherUid}`);
+    return onValue(typingRef, (snap) => cb(!!snap.val()));
+}
+
+function clearChatListPresence() {
+    chatListPresenceUnsubs.forEach((fn) => fn());
+    chatListPresenceUnsubs = [];
+}
+
+function clearThreadPresence() {
+    if (threadStatusUnsub) { threadStatusUnsub(); threadStatusUnsub = null; }
+    if (threadTypingUnsub) { threadTypingUnsub(); threadTypingUnsub = null; }
+}
+
+function formatLastSeen(statusVal) {
+    if (!statusVal || !statusVal.last_changed) return 'Offline';
+    const diffMin = Math.floor((Date.now() - statusVal.last_changed) / 60000);
+    if (diffMin < 1) return 'Last seen just now';
+    if (diffMin < 60) return `Last seen ${diffMin}m ago`;
+    if (diffMin < 60 * 24) return `Last seen ${Math.floor(diffMin / 60)}h ago`;
+    return `Last seen ${Math.floor(diffMin / 1440)}d ago`;
+}
+
+// --- My own typing flag (written while I compose, read by the other side) ---
+function notifyTyping() {
+    if (!activeChatId || !rtdbReady()) return;
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    if (!uid) return;
+    const { ref, set, onDisconnect } = window.rtdbFns;
+    const typingRef = ref(window.firebaseRtdb, `typing/${activeChatId}/${uid}`);
+    set(typingRef, true).catch(() => {});
+    onDisconnect(typingRef).remove();
+
+    if (typingIdleTimer) clearTimeout(typingIdleTimer);
+    typingIdleTimer = setTimeout(stopTypingIndicator, TYPING_IDLE_MS);
+}
+
+function stopTypingIndicator() {
+    if (typingIdleTimer) { clearTimeout(typingIdleTimer); typingIdleTimer = null; }
+    if (!activeChatId || !rtdbReady()) return;
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    if (!uid) return;
+    const { ref, remove } = window.rtdbFns;
+    remove(ref(window.firebaseRtdb, `typing/${activeChatId}/${uid}`)).catch(() => {});
+}
+
+chatMessageInput?.addEventListener('input', notifyTyping);
+chatMessageInput?.addEventListener('blur', stopTypingIndicator);
+
 // ===== Chat / Messages =====
+
 // Data model:
 //   chats/{chatId}: { participants: [uid, uid], participant_labels: {uid: name},
 //     type: 'listing' | 'support', crop_id, crop_name, last_message,
@@ -1622,6 +1743,8 @@ function openMessagesModal() {
 
 function closeMessagesModal() {
     if (threadUnsubscribe) { threadUnsubscribe(); threadUnsubscribe = null; }
+    stopTypingIndicator();
+    clearThreadPresence();
     activeChatId = null;
     messagesModal?.classList.remove('active', 'chat-maximized', 'chat-minimized');
 }
@@ -1663,6 +1786,7 @@ document.querySelector('#messagesModal .chat-window-titlebar')?.addEventListener
 
 function renderChatList(uid) {
     if (!chatListContainer) return;
+    clearChatListPresence();
     if (!cachedChats.length) {
         chatListContainer.innerHTML = '<div class="chat-list-empty"><i class="fa-regular fa-comment"></i><p>No conversations yet</p></div>';
         return;
@@ -1687,7 +1811,10 @@ function renderChatList(uid) {
             + (isUnread ? ' chat-list-item-unread' : '')
             + (isActive ? ' chat-list-item-active' : '');
         row.innerHTML = `
-            ${chatAvatarHtml(otherLabelRaw, otherUid || chat.id)}
+            <span class="chat-avatar-wrap">
+                ${chatAvatarHtml(otherLabelRaw, otherUid || chat.id)}
+                <span class="presence-dot" hidden></span>
+            </span>
             <div class="chat-list-item-main">
                 <div class="chat-list-item-top">
                     <span class="chat-list-item-name">${otherLabel}</span>
@@ -1700,11 +1827,34 @@ function renderChatList(uid) {
         `;
         row.addEventListener('click', () => openChatThread(chat.id));
         chatListContainer.appendChild(row);
+
+        if (otherUid) {
+            const dotEl = row.querySelector('.presence-dot');
+            const previewEl = row.querySelector('.chat-list-item-preview');
+            const statusUnsub = subscribeToPresence(otherUid, (statusVal) => {
+                if (!dotEl) return;
+                const isOnline = statusVal?.state === 'online';
+                dotEl.hidden = false;
+                dotEl.classList.toggle('presence-dot-online', isOnline);
+            });
+            const typingUnsub = subscribeToTyping(chat.id, otherUid, (isTyping) => {
+                if (!previewEl) return;
+                if (isTyping) {
+                    previewEl.textContent = 'Typing…';
+                    previewEl.classList.add('chat-list-item-typing');
+                } else {
+                    previewEl.textContent = lastMsg.replace(/<[^>]*>/g, '') || 'No messages yet';
+                    previewEl.classList.remove('chat-list-item-typing');
+                }
+            });
+            chatListPresenceUnsubs.push(statusUnsub, typingUnsub);
+        }
     });
 }
 
 async function openChatThread(chatId) {
     if (!messagesModal) return;
+    if (activeChatId && activeChatId !== chatId) stopTypingIndicator(); // leaving the old chat
     const chatEmptyState = document.getElementById('chatEmptyState');
     chatListView.hidden = true; // mobile: switches away from the list; desktop: overridden to stay visible via CSS
     chatThreadView.hidden = false;
@@ -1721,6 +1871,47 @@ async function openChatThread(chatId) {
     chatThreadSubtitle.textContent = chatMeta?.type === 'listing' && chatMeta.crop_name
         ? `About: ${chatMeta.crop_name}`
         : (chatMeta?.type === 'support' ? 'Support conversation' : '');
+
+    // Presence dot + "Online" / "Last seen…" / "Typing…" line in the thread
+    // header. Torn down and re-subscribed every time a different thread is
+    // opened so we're never listening to the wrong conversation's typing
+    // state.
+    clearThreadPresence();
+    const presenceDot = document.getElementById('chatThreadPresenceDot');
+    const presenceLine = document.getElementById('chatThreadPresence');
+    let lastKnownStatus = null;
+    let isOtherTyping = false;
+    function renderThreadPresenceLine() {
+        if (!presenceLine) return;
+        if (isOtherTyping) {
+            presenceLine.textContent = 'Typing…';
+            presenceLine.className = 'chat-thread-presence chat-thread-presence-typing';
+            presenceLine.hidden = false;
+            return;
+        }
+        if (!lastKnownStatus) { presenceLine.hidden = true; return; }
+        const isOnline = lastKnownStatus.state === 'online';
+        presenceLine.textContent = isOnline ? 'Online' : formatLastSeen(lastKnownStatus);
+        presenceLine.className = 'chat-thread-presence' + (isOnline ? ' chat-thread-presence-online' : '');
+        presenceLine.hidden = false;
+    }
+    if (otherUid) {
+        threadStatusUnsub = subscribeToPresence(otherUid, (statusVal) => {
+            lastKnownStatus = statusVal;
+            if (presenceDot) {
+                const isOnline = statusVal?.state === 'online';
+                presenceDot.hidden = false;
+                presenceDot.classList.toggle('presence-dot-online', isOnline);
+            }
+            renderThreadPresenceLine();
+        });
+        threadTypingUnsub = subscribeToTyping(chatId, otherUid, (isTyping) => {
+            isOtherTyping = isTyping;
+            renderThreadPresenceLine();
+        });
+    } else if (presenceDot) {
+        presenceDot.hidden = true;
+    }
 
     // Figure out whether we can actually encrypt/decrypt for this
     // conversation before loading any messages, so the lock badge is
@@ -1814,6 +2005,7 @@ async function handleSendChatMessage(e) {
     const { collection, doc, setDoc, arrayUnion } = window.dbFns;
 
     chatMessageInput.value = '';
+    stopTypingIndicator();
     try {
         const chatMeta = cachedChats.find((c) => c.id === activeChatId);
         const otherUid = chatMeta ? (chatMeta.participants || []).find((p) => p !== user.uid) : null;
@@ -2026,6 +2218,8 @@ async function initApp() {
             loadNotifications();
             await initE2EE(user.uid);
             subscribeToChats(user.uid);
+            currentPresenceUid = user.uid;
+            initPresence(user.uid);
 
             // (Re)start the inactivity clock now that someone is signed in.
             resetInactivityTimer();
@@ -2039,6 +2233,8 @@ async function initApp() {
             unsubscribeFromChats();
             closeMessagesModal();
             clearE2eeSession();
+            teardownPresence(currentPresenceUid);
+            currentPresenceUid = null;
             currentNotifications = [];
             readNotificationIdsCache = new Set();
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
