@@ -1304,6 +1304,7 @@
             <section id="mySubmissionsSection" class="listings" hidden>
                 <div class="section-header">
                     <h2>My Listings</h2>
+                    <button type="button" id="contactSupportBtn" class="btn-outline"><i class="fa-solid fa-headset"></i> Contact Support</button>
                 </div>
                 <div id="mySubmissionsContainer" class="grid"></div>
             </section>
@@ -1433,6 +1434,28 @@
 
                 <button type="submit" id="addListingSubmitBtn" class="btn-full btn-blue">Publish Listing</button>
             </form>
+        </div>
+    </div>
+
+    <div id="messagesModal" class="modal-overlay">
+        <div class="modal-content float-in chat-modal">
+            <button class="close-btn" id="closeMessagesModal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+
+            <div id="chatListView">
+                <h3 style="color: var(--sl-blue); margin-bottom: 1rem;">Messages</h3>
+                <div id="chatListContainer" class="chat-list"><p class="text-muted">Loading…</p></div>
+            </div>
+
+            <div id="chatThreadView" hidden>
+                <button type="button" id="chatBackBtn" class="btn-manage" style="margin-bottom: 0.75rem;"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                <h3 id="chatThreadTitle" style="color: var(--sl-blue); margin-bottom: 0.15rem;"></h3>
+                <p id="chatThreadSubtitle" class="text-muted" style="font-size: 0.85rem; margin-bottom: 0.75rem;"></p>
+                <div id="chatMessagesContainer" class="chat-messages"></div>
+                <form id="chatMessageForm" class="chat-message-form">
+                    <input type="text" id="chatMessageInput" placeholder="Type a message…" autocomplete="off" required>
+                    <button type="submit" class="btn-blue"><i class="fa-solid fa-paper-plane"></i></button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -1869,7 +1892,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendEmailVerification, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, writeBatch, onSnapshot, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB4mHBxFdDDhIZCcFcpBqQXdBc2NgkMwxw",
@@ -1945,7 +1968,10 @@
         doc,
         setDoc,
         getDoc,
-        writeBatch
+        writeBatch,
+        onSnapshot,
+        arrayUnion,
+        arrayRemove
       };
 
       window.testFirestore = async function () {
