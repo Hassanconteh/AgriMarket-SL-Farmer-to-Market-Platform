@@ -1035,6 +1035,20 @@ async function handleGoogleSignInSuccess(result) {
     const db = window.firebaseDb;
     const user = result.user;
 
+    // Close and toast immediately, before touching Firestore at all — the
+    // sign-in itself already succeeded at this point, so there's no reason
+    // to make the user wait on a profile-doc round trip just to see the
+    // modal go away. onAuthStateChanged (registered in initApp) already
+    // handles showing the dashboard and rendering the navbar once the auth
+    // state resolves.
+    closeModal();
+    const firstName = user.displayName ? user.displayName.trim().split(/\s+/)[0] : '';
+    triggerToast(firstName ? `Welcome, ${firstName}!` : 'Signed in with Google.');
+
+    // On first sign-in, create a 'users' profile doc in the background,
+    // mirroring what the email/password registration flow writes, so
+    // getFirstName() and any other code that reads users/{uid} keeps
+    // working the same regardless of which sign-in method someone used.
     try {
         const { doc, getDoc, setDoc } = window.dbFns;
         const profileRef = doc(db, 'users', user.uid);
@@ -1049,15 +1063,6 @@ async function handleGoogleSignInSuccess(result) {
     } catch (err) {
         console.warn('Failed to write/check user profile for Google sign-in', err);
     }
-
-    // onAuthStateChanged (registered in initApp) already handles showing
-    // the dashboard and rendering the navbar once the auth state resolves,
-    // so this just closes the modal (matching the email/password flows,
-    // which close it right after a successful sign-in/registration) and
-    // adds a welcome toast on top.
-    closeModal();
-    const firstName = user.displayName ? user.displayName.trim().split(/\s+/)[0] : '';
-    triggerToast(firstName ? `Welcome, ${firstName}!` : 'Signed in with Google.');
 }
 
 // Called once on every page load to pick up the result of a redirect that
@@ -2282,6 +2287,13 @@ async function initApp() {
             const cred = await createUserWithEmailAndPassword(auth, email, password);
             const uid = cred.user.uid;
 
+            // Close and toast immediately — the account already exists at
+            // this point, so nothing below should hold up the modal
+            // closing. Everything else here (profile doc, display name,
+            // verification email) finishes in the background.
+            closeModal();
+            triggerToast("Account created! We've sent a verification link to your email — you'll need to verify it before contacting farmers.");
+
             // Set the Auth profile's displayName to the user's first name so
             // the navbar (and any future onAuthStateChanged callback) shows
             // "Hi, <first name>" instead of the email address.
@@ -2317,9 +2329,6 @@ async function initApp() {
             } catch (err) {
                 console.warn('Failed to send verification email', err);
             }
-
-            closeModal();
-            triggerToast("Account created! We've sent a verification link to your email — you'll need to verify it before contacting farmers.");
         } catch (err) {
             console.error('Sign up failed', err);
             triggerToast(mapFirebaseError(err));
@@ -2341,10 +2350,10 @@ async function initApp() {
             // the user out once the last tab is closed.
             await setAuthPersistence(auth, rememberMe);
             await signInWithEmailAndPassword(auth, email, password);
+            closeModal();
             landingPage.style.display = "none";
             dashboardApp.style.display = "block";
             await loadInitialCrops();
-            closeModal();
         } catch (err) {
             console.error('Sign in failed', err);
             triggerToast(mapFirebaseError(err));
