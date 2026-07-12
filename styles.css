@@ -300,6 +300,9 @@ button { font-family: 'Inter', sans-serif; }
 .chat-thread-header-text { min-width: 0; flex: 1; }
 .chat-thread-header-text h3 { color: var(--text-dark, #1e293b); font-size: 1rem; margin: 0; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-thread-header-text p { color: var(--sl-blue); font-size: 0.78rem; margin: 0.1rem 0 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-encryption-badge { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; }
+.chat-encryption-badge-on { background: #dcfce7; color: #15803d; }
+.chat-encryption-badge-off { background: #f1f5f9; color: var(--text-muted); }
 .chat-messages { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem 1.1rem; }
 .chat-bubble-wrapper { display: flex; flex-direction: column; max-width: 78%; }
 .chat-bubble-wrapper-mine { align-self: flex-end; align-items: flex-end; }
