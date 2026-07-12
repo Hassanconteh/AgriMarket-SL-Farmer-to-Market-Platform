@@ -931,6 +931,12 @@ async function applyFilters() {
 // while someone is actually signed in (started in onAuthStateChanged below);
 // the activity listeners are cheap no-ops otherwise since resetInactivityTimer
 // checks auth.currentUser before scheduling anything.
+//
+// NOTE: this 15-minute inactivity timeout is intentionally independent of
+// the "Remember me" checkbox below. Remember me only controls whether the
+// session survives closing the browser — it does not disable the
+// inactivity timeout, so a "remembered" session left idle for 15 minutes
+// on a shared computer still gets signed out.
 const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
 let inactivityTimeoutId = null;
 
@@ -963,6 +969,23 @@ function resetInactivityTimer() {
 ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach((evt) => {
     document.addEventListener(evt, resetInactivityTimer, { passive: true });
 });
+
+// ===== "Remember me" (persist sign-in across browser restarts) =====
+// Firebase Auth persistence must be set BEFORE the sign-in call it applies
+// to — it's not something you can flip on an already-established session.
+// index.html sets the default to session-only (signed out when the last
+// tab closes) as soon as Firebase initializes; this lets the login form
+// switch that to local persistence (survives closing the browser) for just
+// the sign-in about to happen, based on the "Remember me" checkbox.
+async function setAuthPersistence(auth, remember) {
+    if (!window.authFns?.setPersistence) return;
+    const { setPersistence, browserLocalPersistence, browserSessionPersistence } = window.authFns;
+    try {
+        await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+    } catch (err) {
+        console.warn('Could not set auth persistence', err);
+    }
+}
 
 // ===== Google Sign-In =====
 // Uses signInWithPopup as the primary method. This app's authDomain
@@ -1029,7 +1052,10 @@ async function handleGoogleSignInSuccess(result) {
 
     // onAuthStateChanged (registered in initApp) already handles showing
     // the dashboard and rendering the navbar once the auth state resolves,
-    // so this just adds a welcome toast on top.
+    // so this just closes the modal (matching the email/password flows,
+    // which close it right after a successful sign-in/registration) and
+    // adds a welcome toast on top.
+    closeModal();
     const firstName = user.displayName ? user.displayName.trim().split(/\s+/)[0] : '';
     triggerToast(firstName ? `Welcome, ${firstName}!` : 'Signed in with Google.');
 }
@@ -2305,8 +2331,15 @@ async function initApp() {
         e.preventDefault();
         const email    = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
+        const rememberMe = document.getElementById('rememberMeCheckbox')?.checked;
 
         try {
+            // Must be set BEFORE the sign-in call — it controls how the
+            // session that's about to be created is stored, not the
+            // current one. Local persistence survives closing the
+            // browser entirely; session persistence (the default) signs
+            // the user out once the last tab is closed.
+            await setAuthPersistence(auth, rememberMe);
             await signInWithEmailAndPassword(auth, email, password);
             landingPage.style.display = "none";
             dashboardApp.style.display = "block";
@@ -2322,8 +2355,17 @@ async function initApp() {
     // and the Create Account tab's button. This navigates away from the
     // page immediately (redirect flow), so there's no modal-closing logic
     // to run here — the user comes right back to this page once signed in.
-    document.getElementById('googleSignInBtn')?.addEventListener('click', () => signInWithGoogleHandler(auth));
-    document.getElementById('googleSignUpBtn')?.addEventListener('click', () => signInWithGoogleHandler(auth));
+    // Only the Sign In tab has a "Remember me" checkbox (account creation
+    // always starts a normal session), so the Create Account tab's Google
+    // button just passes `false`.
+    document.getElementById('googleSignInBtn')?.addEventListener('click', async () => {
+        await setAuthPersistence(auth, document.getElementById('rememberMeCheckbox')?.checked);
+        signInWithGoogleHandler(auth);
+    });
+    document.getElementById('googleSignUpBtn')?.addEventListener('click', async () => {
+        await setAuthPersistence(auth, false);
+        signInWithGoogleHandler(auth);
+    });
 
     // Password reset (send reset email)
     resetForm.addEventListener('submit', async (e) => {
