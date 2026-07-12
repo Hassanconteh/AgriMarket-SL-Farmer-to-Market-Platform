@@ -1321,12 +1321,198 @@ function renderMySubmissions(items) {
     });
 }
 
+// ===== End-to-end encryption (E2EE) for chat =====
+// Each user gets a device-local ECDH (P-256) key pair the first time chat
+// is used on a given browser. The PRIVATE key never leaves this browser —
+// it lives in IndexedDB and is never written to Firestore or sent anywhere.
+// Only the public key is published, to users/{uid}.pub_key_jwk, since a
+// public key is safe to share with anyone.
+//
+// For a given 1:1 conversation, both participants independently derive the
+// *same* AES-256 key on their own device via ECDH (my private key + their
+// public key). That shared key never touches the server either. Messages
+// are encrypted with it before being written to Firestore, so Firestore
+// only ever stores ciphertext for an encrypted chat — not the message text.
+//
+// Trade-offs worth knowing (this is inherent to real E2EE, not a bug):
+//  - The private key lives only in this browser's storage. Clearing site
+//    data, or opening the app in a different browser/device, generates a
+//    NEW key pair — messages encrypted under the OLD one can no longer be
+//    decrypted there. There is no server-side key recovery by design.
+//  - If the other participant hasn't opened the app since this shipped (so
+//    they have no public key on file yet), that conversation falls back to
+//    plain text with an explicit `enc:false` flag, and the thread header
+//    shows an "unlocked" badge so it's never silently insecure.
+//
+// IMPORTANT — Firestore security rules requirement: this only works if any
+// signed-in user can READ another user's `users/{uid}` doc (specifically
+// its pub_key_jwk field) while still only being able to WRITE their own.
+// Public keys aren't secret, so a rule along these lines is needed:
+//   match /users/{uid} {
+//     allow read: if request.auth != null;
+//     allow write: if request.auth != null && request.auth.uid == uid;
+//   }
+
+const E2EE_DB_NAME = 'agrimarket_e2ee';
+const E2EE_STORE = 'keypairs';
+
+function openE2eeDb() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(E2EE_DB_NAME, 1);
+        req.onupgradeneeded = () => { req.result.createObjectStore(E2EE_STORE); };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function idbGet(key) {
+    const db = await openE2eeDb();
+    return new Promise((resolve, reject) => {
+        const req = db.transaction(E2EE_STORE, 'readonly').objectStore(E2EE_STORE).get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function idbSet(key, value) {
+    const db = await openE2eeDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(E2EE_STORE, 'readwrite');
+        tx.objectStore(E2EE_STORE).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+let myE2eeKeyPair = null;          // { publicKey, privateKey } CryptoKey objects, for this session
+const sharedKeyCache = new Map();  // chatId -> derived AES-GCM CryptoKey, or null if unavailable
+const otherPubKeyCache = new Map(); // otherUid -> JWK, or null if they don't have one published
+
+function e2eeSupported() {
+    return !!(window.crypto && window.crypto.subtle && window.indexedDB);
+}
+
+// Loads this browser's stored key pair for `uid`, generating and publishing
+// a new one on first use. Safe to call every time a user signs in.
+async function initE2EE(uid) {
+    if (!e2eeSupported()) return;
+    try {
+        let pair = await idbGet(uid);
+        if (!pair) {
+            pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey']);
+            await idbSet(uid, pair);
+        }
+        myE2eeKeyPair = pair;
+
+        const db = window.firebaseDb;
+        const { doc, getDoc, setDoc } = window.dbFns;
+        const publicJwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
+
+        const profileRef = doc(db, 'users', uid);
+        const snap = await getDoc(profileRef);
+        const existingJwk = snap.exists() ? snap.data()?.pub_key_jwk : null;
+        // Only write if it actually changed, to avoid a redundant write on
+        // every single login.
+        if (JSON.stringify(existingJwk) !== JSON.stringify(publicJwk)) {
+            await setDoc(profileRef, { pub_key_jwk: publicJwk }, { merge: true });
+        }
+    } catch (err) {
+        console.warn('E2EE setup failed — chat will fall back to plain text', err);
+        myE2eeKeyPair = null;
+    }
+}
+
+function clearE2eeSession() {
+    myE2eeKeyPair = null;
+    sharedKeyCache.clear();
+    otherPubKeyCache.clear();
+}
+
+async function fetchOtherPublicKey(otherUid) {
+    if (otherPubKeyCache.has(otherUid)) return otherPubKeyCache.get(otherUid);
+    try {
+        const db = window.firebaseDb;
+        const { doc, getDoc } = window.dbFns;
+        const snap = await getDoc(doc(db, 'users', otherUid));
+        const jwk = snap.exists() ? (snap.data()?.pub_key_jwk || null) : null;
+        otherPubKeyCache.set(otherUid, jwk);
+        return jwk;
+    } catch (err) {
+        console.warn('Could not fetch public key for', otherUid, err);
+        return null;
+    }
+}
+
+// Derives (and caches) the shared AES-256 key for a 1:1 chat. Returns null
+// if E2EE isn't available for this conversation yet (no Web Crypto/IndexedDB
+// support, no local key pair, or the other person hasn't published a public
+// key yet) — callers treat null as "fall back to plain text".
+async function getSharedKeyForChat(chatId, otherUid) {
+    if (!e2eeSupported() || !myE2eeKeyPair || !otherUid) return null;
+    if (sharedKeyCache.has(chatId)) return sharedKeyCache.get(chatId);
+
+    const otherJwk = await fetchOtherPublicKey(otherUid);
+    if (!otherJwk) { sharedKeyCache.set(chatId, null); return null; }
+
+    try {
+        const otherPublicKey = await crypto.subtle.importKey('jwk', otherJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+        const sharedKey = await crypto.subtle.deriveKey(
+            { name: 'ECDH', public: otherPublicKey },
+            myE2eeKeyPair.privateKey,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+        sharedKeyCache.set(chatId, sharedKey);
+        return sharedKey;
+    } catch (err) {
+        console.warn('Could not derive shared key for chat', chatId, err);
+        sharedKeyCache.set(chatId, null);
+        return null;
+    }
+}
+
+function bufToBase64(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function base64ToBuf(b64) {
+    return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
+async function encryptChatText(sharedKey, text) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(text);
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sharedKey, encoded);
+    return { ciphertext: bufToBase64(ciphertext), iv: bufToBase64(iv) };
+}
+
+async function decryptChatText(sharedKey, ciphertextB64, ivB64) {
+    const ciphertext = base64ToBuf(ciphertextB64);
+    const iv = base64ToBuf(ivB64);
+    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sharedKey, ciphertext);
+    return new TextDecoder().decode(plainBuf);
+}
+
+function updateChatEncryptionBadge(isEncrypted) {
+    const badge = document.getElementById('chatEncryptionBadge');
+    if (!badge) return;
+    badge.className = 'chat-encryption-badge ' + (isEncrypted ? 'chat-encryption-badge-on' : 'chat-encryption-badge-off');
+    badge.innerHTML = isEncrypted ? '<i class="fa-solid fa-lock"></i>' : '<i class="fa-solid fa-lock-open"></i>';
+    badge.title = isEncrypted
+        ? 'End-to-end encrypted — only you and the other person can read these messages'
+        : 'Not yet encrypted — waiting for the other person to open the app at least once';
+}
+
 // ===== Chat / Messages =====
 // Data model:
 //   chats/{chatId}: { participants: [uid, uid], participant_labels: {uid: name},
 //     type: 'listing' | 'support', crop_id, crop_name, last_message,
-//     last_message_at, last_sender_id, unread_by: [uid, ...], created_at }
-//   chats/{chatId}/messages/{messageId}: { sender_id, text, created_at }
+//     last_message_enc, last_message_at, last_sender_id, unread_by: [uid, ...],
+//     created_at }
+//   chats/{chatId}/messages/{messageId}:
+//     encrypted:  { sender_id, created_at, enc: true, ciphertext, iv }
+//     plain text: { sender_id, created_at, enc: false, text }
+//   (see the E2EE module above for how ciphertext/iv are produced)
 //
 // Chat IDs are deterministic rather than randomly generated, so opening an
 // existing conversation never creates a duplicate:
@@ -1488,7 +1674,9 @@ function renderChatList(uid) {
         const otherLabel = escapeHtml(otherLabelRaw);
         const isUnread = Array.isArray(chat.unread_by) && chat.unread_by.includes(uid);
         const isActive = chat.id === activeChatId;
-        const lastMsg = escapeHtml(chat.last_message || 'No messages yet');
+        const lastMsg = chat.last_message_enc
+            ? '🔒 Encrypted message'
+            : escapeHtml(chat.last_message || 'No messages yet');
         const contextLabel = chat.type === 'listing' && chat.crop_name ? escapeHtml(chat.crop_name) : (chat.type === 'support' ? 'Support' : '');
         const timeLabel = escapeHtml(formatChatListTime(chat.last_message_at));
 
@@ -1533,6 +1721,12 @@ async function openChatThread(chatId) {
         ? `About: ${chatMeta.crop_name}`
         : (chatMeta?.type === 'support' ? 'Support conversation' : '');
 
+    // Figure out whether we can actually encrypt/decrypt for this
+    // conversation before loading any messages, so the lock badge is
+    // accurate the moment the thread appears.
+    const sharedKey = await getSharedKeyForChat(chatId, otherUid);
+    updateChatEncryptionBadge(!!sharedKey);
+
     // Refresh the list now so the newly-opened conversation gets the
     // active-state highlight immediately (relevant on desktop, where the
     // sidebar stays visible alongside the thread).
@@ -1556,21 +1750,36 @@ async function openChatThread(chatId) {
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('created_at', 'asc'));
     threadUnsubscribe = onSnapshot(q, (snap) => {
         const msgs = snap.docs.map((d) => d.data());
-        renderChatMessages(msgs, uid);
+        renderChatMessages(msgs, uid, sharedKey);
     }, (err) => {
         console.error('Message listener failed', err);
         chatMessagesContainer.innerHTML = '<p class="text-muted">Could not load messages.</p>';
     });
 }
 
-function renderChatMessages(msgs, uid) {
+async function renderChatMessages(msgs, uid, sharedKey) {
     if (!chatMessagesContainer) return;
-    chatMessagesContainer.innerHTML = '';
     if (!msgs.length) {
         chatMessagesContainer.innerHTML = '<div class="chat-messages-empty"><i class="fa-regular fa-comment-dots"></i><p>Say hello 👋</p></div>';
         return;
     }
-    msgs.forEach((m) => {
+
+    // Decrypt everything up front (in parallel) so the thread renders in
+    // one clean pass rather than messages popping in one at a time.
+    const decorated = await Promise.all(msgs.map(async (m) => {
+        if (!m.enc) return { ...m, displayText: m.text || '' };
+        if (!sharedKey) return { ...m, displayText: '🔒 Encrypted message — open this chat on the device you set it up on to read it' };
+        try {
+            const text = await decryptChatText(sharedKey, m.ciphertext, m.iv);
+            return { ...m, displayText: text };
+        } catch (err) {
+            console.warn('Could not decrypt message', err);
+            return { ...m, displayText: '🔒 Unable to decrypt this message' };
+        }
+    }));
+
+    chatMessagesContainer.innerHTML = '';
+    decorated.forEach((m) => {
         const wrapper = document.createElement('div');
         wrapper.className = 'chat-bubble-wrapper ' + (m.sender_id === uid ? 'chat-bubble-wrapper-mine' : 'chat-bubble-wrapper-theirs');
 
@@ -1578,7 +1787,7 @@ function renderChatMessages(msgs, uid) {
         // textContent (not innerHTML) so message text never needs
         // escaping — it can't be interpreted as markup either way.
         bubble.className = 'chat-bubble ' + (m.sender_id === uid ? 'chat-bubble-mine' : 'chat-bubble-theirs');
-        bubble.textContent = m.text || '';
+        bubble.textContent = m.displayText;
 
         const time = document.createElement('span');
         time.className = 'chat-bubble-time';
@@ -1605,17 +1814,30 @@ async function handleSendChatMessage(e) {
 
     chatMessageInput.value = '';
     try {
-        const msgRef = doc(collection(db, 'chats', activeChatId, 'messages'));
-        await setDoc(msgRef, { sender_id: user.uid, text, created_at: new Date().toISOString() });
-
         const chatMeta = cachedChats.find((c) => c.id === activeChatId);
         const otherUid = chatMeta ? (chatMeta.participants || []).find((p) => p !== user.uid) : null;
+        const sharedKey = await getSharedKeyForChat(activeChatId, otherUid);
 
+        const msgRef = doc(collection(db, 'chats', activeChatId, 'messages'));
+        const base = { sender_id: user.uid, created_at: new Date().toISOString() };
         const updatePayload = {
-            last_message: text,
             last_message_at: new Date().toISOString(),
             last_sender_id: user.uid
         };
+
+        if (sharedKey) {
+            const { ciphertext, iv } = await encryptChatText(sharedKey, text);
+            await setDoc(msgRef, { ...base, enc: true, ciphertext, iv });
+            // Never store the plain-text preview for an encrypted chat —
+            // the list view shows a generic lock placeholder instead.
+            updatePayload.last_message = '';
+            updatePayload.last_message_enc = true;
+        } else {
+            await setDoc(msgRef, { ...base, enc: false, text });
+            updatePayload.last_message = text;
+            updatePayload.last_message_enc = false;
+        }
+
         if (otherUid) updatePayload.unread_by = arrayUnion(otherUid);
 
         await setDoc(doc(db, 'chats', activeChatId), updatePayload, { merge: true });
@@ -1801,6 +2023,7 @@ async function initApp() {
             // Load initial crops and the notification bar for signed-in user
             await loadInitialCrops();
             loadNotifications();
+            await initE2EE(user.uid);
             subscribeToChats(user.uid);
 
             // (Re)start the inactivity clock now that someone is signed in.
@@ -1814,6 +2037,7 @@ async function initApp() {
             if (mySubmissionsSection) mySubmissionsSection.hidden = true;
             unsubscribeFromChats();
             closeMessagesModal();
+            clearE2eeSession();
             currentNotifications = [];
             readNotificationIdsCache = new Set();
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
