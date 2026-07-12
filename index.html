@@ -449,6 +449,7 @@
             display: none;
             align-items: center;
             gap: 0.25rem;
+            flex-shrink: 0;
         }
         @media (min-width: 768px) {
             .nav-links { display: flex; }
@@ -481,6 +482,7 @@
             cursor: pointer;
             color: #555;
             font-size: 1rem;
+            flex-shrink: 0;
         }
         @media (min-width: 768px) {
             .mobile-toggle { display: none; }
@@ -969,6 +971,27 @@
         <!-- Auth nav (original, managed by app.js) -->
         <nav id="navMenu" aria-label="Account"></nav>
     </header>
+
+    <script>
+        // The navbar can wrap to two rows on narrow screens (e.g. logged-in
+        // users see several nav items: support, message/notification bells,
+        // "Marketplace", a name greeting, and log out). Everything below it
+        // (--navbar-height) assumed a fixed 70px, so when it wrapped, the
+        // sticky dashboard header and full-screen hero would overlap it
+        // instead of sitting flush underneath. A ResizeObserver keeps the
+        // CSS variable equal to the navbar's *actual* height at all times,
+        // so the rest of the layout adapts automatically to any screen size.
+        (function () {
+            const navbarEl = document.querySelector('.navbar');
+            if (!navbarEl || !window.ResizeObserver) return;
+            const root = document.documentElement;
+            const sync = () => {
+                root.style.setProperty('--navbar-height', navbarEl.offsetHeight + 'px');
+            };
+            new ResizeObserver(sync).observe(navbarEl);
+            sync();
+        })();
+    </script>
 
     <div id="landingPage" class="hero full-screen float-in" style="animation-delay: 0.2s;">
         <div class="hero-content">
