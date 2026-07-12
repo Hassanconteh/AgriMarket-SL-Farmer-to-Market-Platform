@@ -293,6 +293,15 @@ button { font-family: 'Inter', sans-serif; }
 .chat-avatar-circle { flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.02em; }
 .chat-thread-header .chat-avatar-circle { width: 38px; height: 38px; font-size: 0.8rem; }
 
+/* --- Presence (online/offline) & typing --- */
+.chat-avatar-wrap { position: relative; flex-shrink: 0; display: inline-flex; }
+.presence-dot { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: #cbd5e1; border: 2px solid #fff; box-sizing: content-box; }
+.presence-dot-online { background: #22c55e; }
+.chat-thread-presence { color: var(--text-muted) !important; font-weight: 500 !important; }
+.chat-thread-presence-online { color: #15803d !important; font-weight: 600 !important; }
+.chat-thread-presence-typing { color: var(--sl-blue) !important; font-weight: 600 !important; font-style: italic; }
+.chat-list-item-typing { color: var(--sl-blue) !important; font-weight: 600 !important; font-style: italic; }
+
 /* --- Thread pane --- */
 #chatThreadView { border-top: 1px solid #e2e8f0; min-width: 0; }
 .chat-thread-header { display: flex; align-items: center; gap: 0.7rem; padding: 1rem 1.1rem; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; min-width: 0; }
