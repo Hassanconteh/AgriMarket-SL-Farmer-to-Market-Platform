@@ -1482,10 +1482,14 @@
                 <div id="chatThreadView" class="chat-pane" hidden>
                     <div class="chat-thread-header">
                         <button type="button" id="chatBackBtn" class="chat-back-btn" aria-label="Back to conversations"><i class="fa-solid fa-arrow-left"></i></button>
-                        <div id="chatThreadAvatar" class="chat-avatar"></div>
+                        <span class="chat-avatar-wrap">
+                            <div id="chatThreadAvatar" class="chat-avatar"></div>
+                            <span id="chatThreadPresenceDot" class="presence-dot" hidden></span>
+                        </span>
                         <div class="chat-thread-header-text">
                             <h3 id="chatThreadTitle"></h3>
                             <p id="chatThreadSubtitle"></p>
+                            <p id="chatThreadPresence" class="chat-thread-presence" hidden></p>
                         </div>
                         <span id="chatEncryptionBadge" class="chat-encryption-badge" title=""><i class="fa-solid fa-lock"></i></span>
                     </div>
@@ -1938,10 +1942,16 @@
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendEmailVerification, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, writeBatch, onSnapshot, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  import { getDatabase, ref, set, remove, onValue, onDisconnect, serverTimestamp as rtdbServerTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB4mHBxFdDDhIZCcFcpBqQXdBc2NgkMwxw",
     authDomain: "agrimarket-sl.firebaseapp.com",
+    // TODO: replace with your real Realtime Database URL — shown at the top
+    // of Firebase Console > Build > Realtime Database once you've created
+    // the database. Looks like:
+    //   https://agrimarket-sl-default-rtdb.<region>.firebasedatabase.app
+    databaseURL: "https://agrimarket-sl-default-rtdb.firebaseio.com/",
     projectId: "agrimarket-sl",
     storageBucket: "agrimarket-sl.firebasestorage.app",
     messagingSenderId: "692088926578",
@@ -1964,6 +1974,15 @@
   }
   const auth = getAuth(app);
   const db = getFirestore(app);
+  // Realtime Database (not Firestore) is used for presence/typing — it has
+  // native onDisconnect() support, so a closed tab or dropped connection is
+  // detected server-side immediately, without needing a client heartbeat.
+  let rtdb = null;
+  try {
+    rtdb = getDatabase(app);
+  } catch (err) {
+    console.warn('Realtime Database failed to initialize — online/typing status will be unavailable. Make sure it is enabled in the Firebase console and databaseURL is set correctly.', err);
+  }
 
   // Google Sign-In provider, shared with app.js via window.googleProvider
   // so the "Continue with Google" buttons in the auth modal can use it.
@@ -1989,6 +2008,8 @@
     .finally(() => {
       window.firebaseAuth = auth;
       window.firebaseDb = db;
+      window.firebaseRtdb = rtdb;
+      window.rtdbFns = { ref, set, remove, onValue, onDisconnect, serverTimestamp: rtdbServerTimestamp };
       window.authFns = {
         onAuthStateChanged,
         signInWithEmailAndPassword,
