@@ -1325,8 +1325,8 @@ function renderMySubmissions(items) {
 // Each user gets a device-local ECDH (P-256) key pair the first time chat
 // is used on a given browser. The PRIVATE key never leaves this browser —
 // it lives in IndexedDB and is never written to Firestore or sent anywhere.
-// Only the public key is published, to users/{uid}.pub_key_jwk, since a
-// public key is safe to share with anyone.
+// Only the public key is published, to public_keys/{uid}.pub_key_jwk, since
+// a public key is safe to share with anyone.
 //
 // For a given 1:1 conversation, both participants independently derive the
 // *same* AES-256 key on their own device via ECDH (my private key + their
@@ -1345,10 +1345,11 @@ function renderMySubmissions(items) {
 //    shows an "unlocked" badge so it's never silently insecure.
 //
 // IMPORTANT — Firestore security rules requirement: this only works if any
-// signed-in user can READ another user's `users/{uid}` doc (specifically
-// its pub_key_jwk field) while still only being able to WRITE their own.
-// Public keys aren't secret, so a rule along these lines is needed:
-//   match /users/{uid} {
+// signed-in user can READ another user's `public_keys/{uid}` doc, while
+// still only being able to WRITE their own. Public keys aren't secret, so a
+// rule along these lines is needed (kept separate from `users/{uid}`, which
+// also holds things like email, so that collection can stay locked down):
+//   match /public_keys/{uid} {
 //     allow read: if request.auth != null;
 //     allow write: if request.auth != null && request.auth.uid == uid;
 //   }
@@ -1408,13 +1409,13 @@ async function initE2EE(uid) {
         const { doc, getDoc, setDoc } = window.dbFns;
         const publicJwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
 
-        const profileRef = doc(db, 'users', uid);
-        const snap = await getDoc(profileRef);
+        const keyRef = doc(db, 'public_keys', uid);
+        const snap = await getDoc(keyRef);
         const existingJwk = snap.exists() ? snap.data()?.pub_key_jwk : null;
         // Only write if it actually changed, to avoid a redundant write on
         // every single login.
         if (JSON.stringify(existingJwk) !== JSON.stringify(publicJwk)) {
-            await setDoc(profileRef, { pub_key_jwk: publicJwk }, { merge: true });
+            await setDoc(keyRef, { pub_key_jwk: publicJwk }, { merge: true });
         }
     } catch (err) {
         console.warn('E2EE setup failed — chat will fall back to plain text', err);
@@ -1433,7 +1434,7 @@ async function fetchOtherPublicKey(otherUid) {
     try {
         const db = window.firebaseDb;
         const { doc, getDoc } = window.dbFns;
-        const snap = await getDoc(doc(db, 'users', otherUid));
+        const snap = await getDoc(doc(db, 'public_keys', otherUid));
         const jwk = snap.exists() ? (snap.data()?.pub_key_jwk || null) : null;
         otherPubKeyCache.set(otherUid, jwk);
         return jwk;
