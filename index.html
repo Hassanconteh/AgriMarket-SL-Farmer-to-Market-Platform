@@ -1441,20 +1441,34 @@
         <div class="modal-content float-in chat-modal">
             <button class="close-btn" id="closeMessagesModal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
 
-            <div id="chatListView">
-                <h3 style="color: var(--sl-blue); margin-bottom: 1rem;">Messages</h3>
-                <div id="chatListContainer" class="chat-list"><p class="text-muted">Loading…</p></div>
-            </div>
+            <div class="chat-modal-body">
+                <div id="chatListView" class="chat-pane">
+                    <div class="chat-pane-header">
+                        <h3>Messages</h3>
+                    </div>
+                    <div id="chatListContainer" class="chat-list"><p class="text-muted">Loading…</p></div>
+                </div>
 
-            <div id="chatThreadView" hidden>
-                <button type="button" id="chatBackBtn" class="btn-manage" style="margin-bottom: 0.75rem;"><i class="fa-solid fa-arrow-left"></i> Back</button>
-                <h3 id="chatThreadTitle" style="color: var(--sl-blue); margin-bottom: 0.15rem;"></h3>
-                <p id="chatThreadSubtitle" class="text-muted" style="font-size: 0.85rem; margin-bottom: 0.75rem;"></p>
-                <div id="chatMessagesContainer" class="chat-messages"></div>
-                <form id="chatMessageForm" class="chat-message-form">
-                    <input type="text" id="chatMessageInput" placeholder="Type a message…" autocomplete="off" required>
-                    <button type="submit" class="btn-blue"><i class="fa-solid fa-paper-plane"></i></button>
-                </form>
+                <div id="chatThreadView" class="chat-pane" hidden>
+                    <div class="chat-thread-header">
+                        <button type="button" id="chatBackBtn" class="chat-back-btn" aria-label="Back to conversations"><i class="fa-solid fa-arrow-left"></i></button>
+                        <div id="chatThreadAvatar" class="chat-avatar"></div>
+                        <div class="chat-thread-header-text">
+                            <h3 id="chatThreadTitle"></h3>
+                            <p id="chatThreadSubtitle"></p>
+                        </div>
+                    </div>
+                    <div id="chatMessagesContainer" class="chat-messages"></div>
+                    <form id="chatMessageForm" class="chat-message-form">
+                        <input type="text" id="chatMessageInput" placeholder="Type a message…" autocomplete="off" required>
+                        <button type="submit" class="chat-send-btn" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
+                    </form>
+                </div>
+
+                <div id="chatEmptyState" class="chat-pane chat-empty-state">
+                    <i class="fa-regular fa-comments"></i>
+                    <p>Select a conversation to start chatting</p>
+                </div>
             </div>
         </div>
     </div>
