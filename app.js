@@ -28,6 +28,9 @@ const addListingModalTitle    = document.getElementById('addListingModalTitle');
 const addListingModalSubtitle = document.getElementById('addListingModalSubtitle');
 const addListingSubmitBtn     = document.getElementById('addListingSubmitBtn');
 
+const profileView   = document.getElementById('profileView');
+const profileForm   = document.getElementById('profileForm');
+
 const pendingApprovalsSection   = document.getElementById('pendingApprovalsSection');
 const pendingApprovalsContainer = document.getElementById('pendingApprovalsContainer');
 const pendingApprovalsCount     = document.getElementById('pendingApprovalsCount');
@@ -1710,6 +1713,16 @@ function getChatInitials(name) {
 function chatAvatarHtml(name, seed) {
     return `<div class="chat-avatar-circle" style="background:${getChatAvatarColor(seed || name)}">${escapeHtml(getChatInitials(name))}</div>`;
 }
+// Same as chatAvatarHtml, but renders an actual photo when one is available
+// (currently only ever the signed-in user's own photoURL — other users'
+// avatars stay initials-only since photo_url isn't in a publicly-readable
+// Firestore doc). Falls back to the initials circle otherwise.
+function avatarHtml(name, seed, photoUrl) {
+    if (photoUrl) {
+        return `<img class="avatar-photo" src="${escapeHtml(photoUrl)}" alt="${escapeHtml(name || 'Profile photo')}">`;
+    }
+    return chatAvatarHtml(name, seed);
+}
 // Compact relative time for the conversation list (e.g. "5m", "Yesterday").
 function formatChatListTime(iso) {
     if (!iso) return '';
@@ -1816,6 +1829,14 @@ document.querySelector('#messagesModal .chat-window-titlebar')?.addEventListener
 });
 
 function renderChatList(uid) {
+    // Kept in sync here, rather than a second Firestore listener, since
+    // this function already re-runs on every chats snapshot via
+    // subscribeToChats(uid). The profile page's elements are always in the
+    // DOM (it's a static section, just hidden when not active), so this
+    // keeps its "Conversations" stat and recent-chats list live even while
+    // the profile page isn't the one currently showing.
+    renderProfileActivityChats(uid);
+
     if (!chatListContainer) return;
     clearChatListPresence();
     if (!cachedChats.length) {
@@ -2116,6 +2137,367 @@ async function openOrCreateChat({ otherUid, otherLabel, type, cropId = null, cro
     }
 }
 
+// ===== Profile management =====
+// Reads/writes the same users/{uid} doc that already backs getFirstName()
+// and the E2EE public key lookup, so nothing here changes the data model —
+// it only adds a UI for editing full_name (kept in sync with the Auth
+// displayName, same as the registration flow does) plus phone, location,
+// and a photo_url field for the avatar upload. Firestore rules already
+// cover all of this: the existing `users/{userId}: allow read, write: if
+// auth.uid == userId` rule is exactly what a "read/write your own profile"
+// form needs, so no rules changes were required for any of it.
+//
+// Shown as a full page (toggled the same way dashboardApp/landingPage
+// already are) rather than a modal, so it has room for the avatar,
+// account details, activity summary, and danger zone side by side.
+
+function showProfileView(user) {
+    if (!profileView || !user) return;
+    document.getElementById('staticPageContainer').style.display = 'none';
+    document.getElementById('landingSections').style.display = 'none';
+    landingPage.style.display = 'none';
+    dashboardApp.style.display = 'none';
+    profileView.style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    loadProfileView(user);
+}
+
+async function loadProfileView(user) {
+    const db = window.firebaseDb;
+    const { doc, getDoc } = window.dbFns;
+
+    let profileData = {};
+    try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) profileData = snap.data();
+    } catch (err) {
+        console.warn('Could not load profile', err);
+    }
+
+    const displayName = user.displayName || profileData.full_name || '';
+    const photoUrl = user.photoURL || profileData.photo_url || '';
+
+    // Header
+    const avatarEl = document.getElementById('profileAvatarLg');
+    if (avatarEl) avatarEl.innerHTML = avatarHtml(displayName || user.email || 'User', user.uid, photoUrl);
+    document.getElementById('profileHeaderName').textContent = displayName || user.email || 'User';
+    const isAdmin = user.uid === ADMIN_UID;
+    document.getElementById('profileRoleBadge').textContent = isAdmin ? 'Administrator' : 'Member';
+
+    // Editable fields
+    document.getElementById('profileFullName').value = displayName;
+    document.getElementById('profilePhone').value = profileData.phone || '';
+    document.getElementById('profileLocation').value = profileData.location || '';
+
+    // Account (read-only) fields
+    document.getElementById('profileEmailValue').textContent = user.email || '—';
+    const verifiedBadge = document.getElementById('profileEmailVerifiedBadge');
+    verifiedBadge.textContent = user.emailVerified ? 'Verified' : 'Not verified';
+    verifiedBadge.className = 'profile-verified-badge ' + (user.emailVerified ? 'profile-verified-badge-yes' : 'profile-verified-badge-no');
+    document.getElementById('profileResendVerificationBtn').hidden = !!user.emailVerified;
+
+    const isPasswordAccount = (user.providerData || []).some((p) => p.providerId === 'password');
+    document.getElementById('profileSignInMethod').textContent = isPasswordAccount ? 'Email & Password' : 'Google';
+    document.getElementById('profileChangePasswordBtn').hidden = !isPasswordAccount;
+    document.getElementById('deleteAccountPasswordGroup').hidden = !isPasswordAccount;
+
+    const memberSinceEl = document.getElementById('profileMemberSince');
+    const createdTime = user.metadata?.creationTime;
+    memberSinceEl.textContent = createdTime
+        ? new Date(createdTime).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+        : (profileData.created_at ? new Date(profileData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—');
+
+    loadProfileActivity(user.uid);
+}
+
+// --- Activity summary: listing counts + a live view of recent conversations ---
+async function loadProfileActivity(uid) {
+    const db = window.firebaseDb;
+    const { collection, query, where, getDocs } = window.dbFns;
+
+    try {
+        const snap = await getDocs(query(collection(db, 'crops'), where('submitted_by', '==', uid)));
+        const items = snap.docs.map((d) => d.data());
+        document.getElementById('profileStatListings').textContent = items.length;
+        document.getElementById('profileStatApproved').textContent = items.filter((i) => i.status === 'approved').length;
+        document.getElementById('profileStatPending').textContent = items.filter((i) => i.status === 'pending').length;
+    } catch (err) {
+        console.warn('Failed to load listing stats', err);
+    }
+
+    // cachedChats is kept live by subscribeToChats(uid), started at sign-in
+    // (see onAuthStateChanged). renderChatList() already re-renders on every
+    // chats snapshot and also calls renderProfileActivityChats() at the end
+    // of its own body (see below), so the conversation count/list here stay
+    // in sync automatically without a second Firestore listener — this call
+    // just paints the current data immediately on page load.
+    renderProfileActivityChats(uid);
+}
+
+function renderProfileActivityChats(uid) {
+    const statEl = document.getElementById('profileStatChats');
+    const listEl = document.getElementById('profileRecentChats');
+    if (!statEl || !listEl) return;
+    statEl.textContent = cachedChats.length;
+    listEl.innerHTML = '';
+    cachedChats.slice(0, 3).forEach((chat) => {
+        const otherUid = (chat.participants || []).find((p) => p !== uid);
+        const label = (chat.participant_labels && chat.participant_labels[otherUid]) || (chat.type === 'support' ? 'Support' : 'User');
+        const preview = chat.last_message_enc ? '🔒 Encrypted message' : (chat.last_message || 'No messages yet');
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'profile-recent-chat-row';
+        row.innerHTML = `
+            ${chatAvatarHtml(label, otherUid || chat.id)}
+            <div>
+                <div class="profile-recent-chat-name">${escapeHtml(label)}</div>
+                <div class="profile-recent-chat-preview">${escapeHtml(preview)}</div>
+            </div>
+        `;
+        row.addEventListener('click', () => {
+            messagesModal?.classList.add('active');
+            openChatThread(chat.id);
+        });
+        listEl.appendChild(row);
+    });
+    if (!cachedChats.length) {
+        listEl.innerHTML = '<p class="text-muted">No conversations yet.</p>';
+    }
+}
+
+document.getElementById('profileBackBtn')?.addEventListener('click', () => window.showDashboardView?.());
+
+profileForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const auth = window.firebaseAuth;
+    const user = auth?.currentUser;
+    if (!user) return;
+
+    const fullName = document.getElementById('profileFullName').value.trim();
+    const phone = document.getElementById('profilePhone').value.trim();
+    const location = document.getElementById('profileLocation').value;
+
+    if (!fullName) {
+        triggerToast('Please enter your name.');
+        return;
+    }
+
+    try {
+        const { updateProfile } = window.authFns;
+        const db = window.firebaseDb;
+        const { doc, setDoc } = window.dbFns;
+
+        // Keep the Auth profile's displayName and the Firestore full_name
+        // in sync, same pairing the registration flow writes — anything
+        // that reads either one (navbar greeting, chat participant labels,
+        // getFirstName()) stays correct regardless of which it reads from.
+        const nameChanged = fullName !== (user.displayName || '');
+        if (nameChanged) {
+            await updateProfile(user, { displayName: fullName });
+        }
+        await setDoc(doc(db, 'users', user.uid), {
+            full_name: fullName,
+            phone: phone || null,
+            location: location || null
+        }, { merge: true });
+
+        // Refresh the navbar greeting/avatar immediately if the name
+        // changed, rather than waiting for the next sign-in.
+        if (nameChanged) await renderAuthedNav(user);
+
+        triggerToast('Profile updated.');
+    } catch (err) {
+        console.error('Failed to update profile', err);
+        triggerToast(mapFirebaseError(err));
+    }
+});
+
+document.getElementById('profileResendVerificationBtn')?.addEventListener('click', async () => {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user) return;
+    try {
+        const { sendEmailVerification } = window.authFns;
+        await sendEmailVerification(user);
+        triggerToast('Verification email sent. Check your inbox.');
+    } catch (err) {
+        console.error('Failed to resend verification email', err);
+        triggerToast(mapFirebaseError(err));
+    }
+});
+
+document.getElementById('profileChangePasswordBtn')?.addEventListener('click', async () => {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user?.email) return;
+    try {
+        const { sendPasswordResetEmail } = window.authFns;
+        await sendPasswordResetEmail(window.firebaseAuth, user.email);
+        triggerToast(`Password reset link sent to ${user.email}.`);
+    } catch (err) {
+        console.error('Failed to send password reset email', err);
+        triggerToast(mapFirebaseError(err));
+    }
+});
+
+// --- Profile photo upload ---
+// Fixed filename per user (avatars/{uid}/photo.<ext>) rather than a unique
+// name per upload, so re-uploading overwrites the old photo in Storage
+// instead of leaving orphaned files behind, and there's nothing extra to
+// clean up on account deletion beyond that one path.
+document.getElementById('profileAvatarUploadBtn')?.addEventListener('click', () => {
+    document.getElementById('profileAvatarInput')?.click();
+});
+
+document.getElementById('profileAvatarInput')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+
+    const user = window.firebaseAuth?.currentUser;
+    if (!user) return;
+
+    if (!file.type.startsWith('image/')) {
+        triggerToast('Please choose an image file.');
+        return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+        triggerToast('Image must be under 5MB.');
+        return;
+    }
+    if (!window.firebaseStorage) {
+        triggerToast('Photo upload is unavailable right now.');
+        return;
+    }
+
+    const avatarEl = document.getElementById('profileAvatarLg');
+    const previousHtml = avatarEl?.innerHTML;
+    // Show the picked image immediately (before upload finishes) so the UI
+    // feels instant; reverts to the previous avatar if the upload fails.
+    const localPreviewUrl = URL.createObjectURL(file);
+    if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${localPreviewUrl}" alt="Profile photo">`;
+
+    try {
+        const { ref, uploadBytes, getDownloadURL } = window.storageFns;
+        const ext = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+        const fileRef = ref(window.firebaseStorage, `avatars/${user.uid}/photo.${ext}`);
+        await uploadBytes(fileRef, file);
+        const downloadUrl = await getDownloadURL(fileRef);
+
+        const { updateProfile } = window.authFns;
+        await updateProfile(user, { photoURL: downloadUrl });
+
+        const db = window.firebaseDb;
+        const { doc, setDoc } = window.dbFns;
+        await setDoc(doc(db, 'users', user.uid), { photo_url: downloadUrl }, { merge: true });
+
+        if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${downloadUrl}" alt="Profile photo">`;
+        await renderAuthedNav(user); // updates the navbar avatar too
+        triggerToast('Profile photo updated.');
+    } catch (err) {
+        console.error('Failed to upload profile photo', err);
+        triggerToast(mapFirebaseError(err));
+        if (avatarEl && previousHtml) avatarEl.innerHTML = previousHtml;
+    } finally {
+        URL.revokeObjectURL(localPreviewUrl);
+    }
+});
+
+// --- Account deletion ---
+const deleteAccountModal = document.getElementById('deleteAccountModal');
+function closeDeleteAccountModal() {
+    deleteAccountModal?.classList.remove('active');
+    document.getElementById('deleteAccountConfirmInput').value = '';
+    document.getElementById('deleteAccountPasswordInput').value = '';
+}
+document.getElementById('profileDeleteAccountBtn')?.addEventListener('click', () => {
+    deleteAccountModal?.classList.add('active');
+});
+document.getElementById('closeDeleteAccountModal')?.addEventListener('click', closeDeleteAccountModal);
+deleteAccountModal?.addEventListener('click', (e) => { if (e.target === deleteAccountModal) closeDeleteAccountModal(); });
+
+document.getElementById('deleteAccountConfirmBtn')?.addEventListener('click', async () => {
+    const user = window.firebaseAuth?.currentUser;
+    if (!user) return;
+
+    const typed = document.getElementById('deleteAccountConfirmInput').value.trim();
+    if (typed !== 'DELETE') {
+        triggerToast('Type DELETE exactly to confirm.');
+        return;
+    }
+
+    const isPasswordAccount = (user.providerData || []).some((p) => p.providerId === 'password');
+
+    // Account deletion requires a recent sign-in — re-authenticate first
+    // rather than waiting for deleteUser() to reject with
+    // auth/requires-recent-login, so the failure mode is a clear prompt
+    // instead of a confusing error after everything else already ran.
+    try {
+        if (isPasswordAccount) {
+            const password = document.getElementById('deleteAccountPasswordInput').value;
+            if (!password) {
+                triggerToast('Enter your password to confirm.');
+                return;
+            }
+            const { EmailAuthProvider, reauthenticateWithCredential } = window.authFns;
+            await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+        } else {
+            const { GoogleAuthProvider, reauthenticateWithPopup } = window.authFns;
+            await reauthenticateWithPopup(user, new GoogleAuthProvider());
+        }
+    } catch (err) {
+        console.error('Re-authentication failed', err);
+        triggerToast(mapFirebaseError(err));
+        return;
+    }
+
+    // Delete owned Firestore data. Firestore rules allow a user to delete
+    // their own crops/{id} (auth.uid == submitted_by) and their own
+    // users/{uid} and public_keys/{uid} docs, so all of this works without
+    // any rules changes. NOTE: crops/{id}/private/contact can only be
+    // deleted by the admin per the existing rules, so that subdoc is left
+    // behind (orphaned under a crop doc that no longer exists/shows up
+    // anywhere) rather than attempted here — including it in this batch
+    // would fail the whole batch for a non-admin user.
+    try {
+        const db = window.firebaseDb;
+        const { collection, query, where, getDocs, doc, writeBatch } = window.dbFns;
+        const cropsSnap = await getDocs(query(collection(db, 'crops'), where('submitted_by', '==', user.uid)));
+        const batch = writeBatch(db);
+        cropsSnap.docs.forEach((d) => batch.delete(doc(db, 'crops', d.id)));
+        batch.delete(doc(db, 'users', user.uid));
+        batch.delete(doc(db, 'public_keys', user.uid));
+        await batch.commit();
+    } catch (err) {
+        console.warn('Cleanup before account deletion failed (continuing with account deletion anyway)', err);
+    }
+
+    // Best-effort avatar cleanup — fine if there was never a photo.
+    try {
+        if (window.firebaseStorage) {
+            const { ref, deleteObject } = window.storageFns;
+            for (const ext of ['jpg', 'png', 'webp']) {
+                try { await deleteObject(ref(window.firebaseStorage, `avatars/${user.uid}/photo.${ext}`)); } catch (_) { /* likely doesn't exist */ }
+            }
+        }
+    } catch (err) {
+        console.warn('Avatar cleanup failed', err);
+    }
+
+    teardownPresence(user.uid);
+
+    try {
+        const { deleteUser } = window.authFns;
+        await deleteUser(user);
+        closeDeleteAccountModal();
+        triggerToast('Your account has been deleted.');
+        // onAuthStateChanged fires with null and handles returning to the
+        // landing page / resetting the UI, same as a normal sign-out.
+    } catch (err) {
+        console.error('Failed to delete account', err);
+        triggerToast(mapFirebaseError(err));
+    }
+});
+
+
 async function initApp() {
     try {
         await waitForFirebase();
@@ -2142,6 +2524,7 @@ async function initApp() {
         document.getElementById('staticPageContainer').style.display = 'none';
         document.getElementById('landingSections').style.display = 'none';
         landingPage.style.display = 'none';
+        if (profileView) profileView.style.display = 'none';
         dashboardApp.style.display = 'block';
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -2176,10 +2559,14 @@ async function initApp() {
                 </div>
             </div>
             <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i class="fa-solid fa-shop"></i> Marketplace</button>
-            <span class="nav-link"><i class="fa-solid fa-user-check"></i> Hi, ${firstName}</span>
+            <button id="navProfileBtn" class="nav-profile-pill" type="button" title="Your profile">
+                ${avatarHtml(firstName || user.email || 'User', user.uid, user.photoURL)}
+                <span>Hi, ${firstName}</span>
+            </button>
             <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
         `;
         document.getElementById('navDashboardBtn').addEventListener('click', showDashboardView);
+        document.getElementById('navProfileBtn').addEventListener('click', () => showProfileView(user));
         setupNotificationBell();
         document.getElementById('chatBellBtn').addEventListener('click', () => openMessagesModal());
         document.getElementById('navSupportBtn')?.addEventListener('click', () => {
