@@ -109,6 +109,24 @@ async function getFirstName(user) {
     return user?.email ? user.email.split('@')[0] : 'there';
 }
 
+// Resolves the photo to show for a user. Real Auth photoURLs (e.g. from
+// Google Sign-In) take priority; otherwise falls back to the base64
+// photo_url saved on the user's Firestore doc by the avatar upload flow
+// (see "Profile photo upload" below), since that flow intentionally does
+// not set user.photoURL.
+async function getAvatarPhotoUrl(user) {
+    if (user?.photoURL) return user.photoURL;
+    try {
+        const { doc, getDoc } = window.dbFns;
+        const db = window.firebaseDb;
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) return snap.data().photo_url || '';
+    } catch (err) {
+        console.warn('Could not look up stored profile photo', err);
+    }
+    return '';
+}
+
 function triggerToast(message) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -2339,10 +2357,47 @@ document.getElementById('profileChangePasswordBtn')?.addEventListener('click', a
 });
 
 // --- Profile photo upload ---
-// Fixed filename per user (avatars/{uid}/photo.<ext>) rather than a unique
-// name per upload, so re-uploading overwrites the old photo in Storage
-// instead of leaving orphaned files behind, and there's nothing extra to
-// clean up on account deletion beyond that one path.
+// Firebase Storage requires the Blaze (pay-as-you-go) plan, so instead of
+// uploading the file to Storage, we resize it down client-side with a
+// <canvas> and save the resulting JPEG as a base64 data URL directly on the
+// users/{uid} Firestore doc (photo_url field). Firestore documents cap out
+// at 1MB, so we resize to a small square thumbnail (128px) and compress
+// fairly aggressively (quality 0.7) — plenty for an avatar, and comfortably
+// under that limit (typically 15-30KB as a base64 string).
+//
+// NOTE: we deliberately do NOT call authFns.updateProfile(user, { photoURL })
+// here. Firebase Auth's photoURL field isn't meant to hold multi-KB data
+// URIs and can silently misbehave or be rejected with long values, so the
+// Firestore doc is the single source of truth for uploaded avatars.
+// Google Sign-In users keep their real Google photoURL on the Auth user
+// object, and avatarHtml()/loadProfileView() already prefer user.photoURL
+// over profileData.photo_url, so nothing else needs to change for them.
+function resizeImageToDataUrl(file, maxDim = 128, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('Could not read image file'));
+        };
+        img.src = objectUrl;
+    });
+}
+
 document.getElementById('profileAvatarUploadBtn')?.addEventListener('click', () => {
     document.getElementById('profileAvatarInput')?.click();
 });
@@ -2363,38 +2418,33 @@ document.getElementById('profileAvatarInput')?.addEventListener('change', async 
         triggerToast('Image must be under 5MB.');
         return;
     }
-    if (!window.firebaseStorage) {
-        triggerToast('Photo upload is unavailable right now.');
-        return;
-    }
 
     const avatarEl = document.getElementById('profileAvatarLg');
     const previousHtml = avatarEl?.innerHTML;
-    // Show the picked image immediately (before upload finishes) so the UI
-    // feels instant; reverts to the previous avatar if the upload fails.
+    // Show the picked image immediately (before resizing/saving finishes) so
+    // the UI feels instant; reverts to the previous avatar if it fails.
     const localPreviewUrl = URL.createObjectURL(file);
     if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${localPreviewUrl}" alt="Profile photo">`;
 
     try {
-        const { ref, uploadBytes, getDownloadURL } = window.storageFns;
-        const ext = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-        const fileRef = ref(window.firebaseStorage, `avatars/${user.uid}/photo.${ext}`);
-        await uploadBytes(fileRef, file);
-        const downloadUrl = await getDownloadURL(fileRef);
+        const dataUrl = await resizeImageToDataUrl(file);
 
-        const { updateProfile } = window.authFns;
-        await updateProfile(user, { photoURL: downloadUrl });
+        // ~1.37 bytes per base64 char; bail out rather than risk a Firestore
+        // write failure if something unusually large slips through.
+        if (dataUrl.length * 0.75 > 900 * 1024) {
+            throw new Error('Resized image is still too large to save.');
+        }
 
         const db = window.firebaseDb;
         const { doc, setDoc } = window.dbFns;
-        await setDoc(doc(db, 'users', user.uid), { photo_url: downloadUrl }, { merge: true });
+        await setDoc(doc(db, 'users', user.uid), { photo_url: dataUrl }, { merge: true });
 
-        if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${downloadUrl}" alt="Profile photo">`;
+        if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${dataUrl}" alt="Profile photo">`;
         await renderAuthedNav(user); // updates the navbar avatar too
         triggerToast('Profile photo updated.');
     } catch (err) {
-        console.error('Failed to upload profile photo', err);
-        triggerToast(mapFirebaseError(err));
+        console.error('Failed to save profile photo', err);
+        triggerToast(err?.message || mapFirebaseError(err));
         if (avatarEl && previousHtml) avatarEl.innerHTML = previousHtml;
     } finally {
         URL.revokeObjectURL(localPreviewUrl);
@@ -2470,17 +2520,10 @@ document.getElementById('deleteAccountConfirmBtn')?.addEventListener('click', as
         console.warn('Cleanup before account deletion failed (continuing with account deletion anyway)', err);
     }
 
-    // Best-effort avatar cleanup — fine if there was never a photo.
-    try {
-        if (window.firebaseStorage) {
-            const { ref, deleteObject } = window.storageFns;
-            for (const ext of ['jpg', 'png', 'webp']) {
-                try { await deleteObject(ref(window.firebaseStorage, `avatars/${user.uid}/photo.${ext}`)); } catch (_) { /* likely doesn't exist */ }
-            }
-        }
-    } catch (err) {
-        console.warn('Avatar cleanup failed', err);
-    }
+    // No separate avatar cleanup needed anymore — the profile photo is
+    // stored as photo_url on the users/{uid} doc, which the batch delete
+    // above already removes (nothing left over in Firebase Storage since
+    // uploads no longer go there).
 
     teardownPresence(user.uid);
 
@@ -2536,6 +2579,7 @@ async function initApp() {
     // doesn't trigger onAuthStateChanged again on its own).
     async function renderAuthedNav(user) {
         const firstName = escapeHtml(await getFirstName(user));
+        const photoUrl = await getAvatarPhotoUrl(user);
         const isAdmin = user.uid === ADMIN_UID;
         navMenu.innerHTML = `
             ${!isAdmin ? '<button id="navSupportBtn" class="btn-outline" title="Contact Support"><i class="fa-solid fa-headset"></i> Support</button>' : ''}
@@ -2560,7 +2604,7 @@ async function initApp() {
             </div>
             <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i class="fa-solid fa-shop"></i> Marketplace</button>
             <button id="navProfileBtn" class="nav-profile-pill" type="button" title="Your profile">
-                ${avatarHtml(firstName || user.email || 'User', user.uid, user.photoURL)}
+                ${avatarHtml(firstName || user.email || 'User', user.uid, photoUrl)}
                 <span>Hi, ${firstName}</span>
             </button>
             <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
