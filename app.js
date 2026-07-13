@@ -2187,13 +2187,17 @@ async function loadProfileView(user) {
     let profileData = {};
     try {
         const snap = await getDoc(doc(db, 'users', user.uid));
+        console.log('[avatar-load] doc exists?', snap.exists(), 'uid:', user.uid);
         if (snap.exists()) profileData = snap.data();
+        console.log('[avatar-load] profileData.photo_url present?', !!profileData.photo_url, 'length:', profileData.photo_url?.length);
     } catch (err) {
         console.warn('Could not load profile', err);
+        console.log('[avatar-load] getDoc FAILED:', err);
     }
 
     const displayName = user.displayName || profileData.full_name || '';
     const photoUrl = user.photoURL || profileData.photo_url || '';
+    console.log('[avatar-load] user.photoURL:', user.photoURL, '| final photoUrl used, length:', photoUrl.length);
 
     // Header
     const avatarEl = document.getElementById('profileAvatarLg');
