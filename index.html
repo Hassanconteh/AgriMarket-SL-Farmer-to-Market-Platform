@@ -1466,6 +1466,119 @@
         </div>
     </div>
 
+    <div id="profileView" style="display:none;">
+        <div class="dashboard-header float-in" style="animation-delay: 0.1s;">
+            <div class="container profile-page-topbar">
+                <button type="button" id="profileBackBtn" class="btn-outline"><i class="fa-solid fa-arrow-left"></i> Back to Marketplace</button>
+                <h2 class="profile-page-title">My Profile</h2>
+            </div>
+        </div>
+
+        <main class="container float-in profile-page" style="animation-delay: 0.3s;">
+            <section class="profile-page-card profile-header-card">
+                <div class="profile-avatar-upload-wrap">
+                    <div id="profileAvatarLg" class="profile-avatar-lg"></div>
+                    <button type="button" id="profileAvatarUploadBtn" class="profile-avatar-upload-btn" title="Change photo" aria-label="Change profile photo">
+                        <i class="fa-solid fa-camera"></i>
+                    </button>
+                    <input type="file" id="profileAvatarInput" accept="image/png,image/jpeg,image/webp" hidden>
+                </div>
+                <div class="profile-header-text">
+                    <h3 id="profileHeaderName">—</h3>
+                    <span id="profileRoleBadge" class="profile-role-badge">Member</span>
+                </div>
+            </section>
+
+            <div class="profile-page-grid">
+                <section class="profile-page-card">
+                    <div class="profile-section-label">Personal Information</div>
+                    <form id="profileForm" class="auth-form active">
+                        <div class="form-group">
+                            <label for="profileFullName">Full Name</label>
+                            <input type="text" id="profileFullName" autocomplete="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="profilePhone">Phone Number</label>
+                            <input type="tel" id="profilePhone" autocomplete="tel" placeholder="e.g., +23276123456">
+                        </div>
+                        <div class="form-group">
+                            <label for="profileLocation">Region</label>
+                            <select id="profileLocation">
+                                <option value="">Not specified</option>
+                                <option value="Bo">Bo</option>
+                                <option value="Kenema">Kenema</option>
+                                <option value="Makeni">Makeni</option>
+                                <option value="Western Area">Western Area</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-full btn-blue">Save Changes</button>
+                    </form>
+                </section>
+
+                <section class="profile-page-card">
+                    <div class="profile-section-label">Account</div>
+                    <div class="profile-static-field">
+                        <span class="profile-static-label">Email Address</span>
+                        <div class="profile-static-value">
+                            <span id="profileEmailValue"></span>
+                            <span id="profileEmailVerifiedBadge" class="profile-verified-badge"></span>
+                        </div>
+                        <button type="button" id="profileResendVerificationBtn" class="auth-link" hidden>Resend verification email</button>
+                    </div>
+                    <div class="profile-static-field">
+                        <span class="profile-static-label">Sign-in Method</span>
+                        <div class="profile-static-value" id="profileSignInMethod"></div>
+                    </div>
+                    <div class="profile-static-field">
+                        <span class="profile-static-label">Member Since</span>
+                        <div class="profile-static-value" id="profileMemberSince"></div>
+                    </div>
+                    <button type="button" id="profileChangePasswordBtn" class="btn-full btn-outline profile-change-password-btn">
+                        <i class="fa-solid fa-lock"></i> Change Password
+                    </button>
+                </section>
+
+                <section class="profile-page-card profile-activity-card">
+                    <div class="profile-section-label">Activity</div>
+                    <div id="profileActivityStats" class="profile-activity-stats">
+                        <div class="profile-stat"><span class="profile-stat-value" id="profileStatListings">—</span><span class="profile-stat-label">Listings</span></div>
+                        <div class="profile-stat"><span class="profile-stat-value" id="profileStatApproved">—</span><span class="profile-stat-label">Approved</span></div>
+                        <div class="profile-stat"><span class="profile-stat-value" id="profileStatPending">—</span><span class="profile-stat-label">Pending</span></div>
+                        <div class="profile-stat"><span class="profile-stat-value" id="profileStatChats">—</span><span class="profile-stat-label">Conversations</span></div>
+                    </div>
+                    <div id="profileRecentChats" class="profile-recent-chats"></div>
+                </section>
+
+                <section class="profile-page-card profile-danger-card">
+                    <div class="profile-section-label profile-danger-label">Danger Zone</div>
+                    <p class="profile-danger-text">Deleting your account permanently removes your profile and listings. This cannot be undone.</p>
+                    <button type="button" id="profileDeleteAccountBtn" class="btn-full profile-delete-btn">
+                        <i class="fa-solid fa-trash"></i> Delete Account
+                    </button>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <div id="deleteAccountModal" class="modal-overlay">
+        <div class="modal-content float-in profile-modal-content">
+            <button class="close-btn" id="closeDeleteAccountModal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="profile-danger-label"><i class="fa-solid fa-triangle-exclamation"></i> Delete Account</h3>
+            <p class="profile-danger-text">This permanently deletes your profile and listings, and cannot be undone. To confirm, type <strong>DELETE</strong> below.</p>
+            <div class="form-group">
+                <label for="deleteAccountConfirmInput">Type DELETE to confirm</label>
+                <input type="text" id="deleteAccountConfirmInput" autocomplete="off">
+            </div>
+            <div class="form-group" id="deleteAccountPasswordGroup">
+                <label for="deleteAccountPasswordInput">Confirm your password</label>
+                <input type="password" id="deleteAccountPasswordInput" autocomplete="current-password">
+            </div>
+            <button type="button" id="deleteAccountConfirmBtn" class="btn-full profile-delete-btn">
+                <i class="fa-solid fa-trash"></i> Permanently Delete My Account
+            </button>
+        </div>
+    </div>
+
     <div id="messagesModal" class="modal-overlay">
         <div class="modal-content float-in chat-modal">
             <div class="chat-window-titlebar">
@@ -1946,9 +2059,10 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendEmailVerification, setPersistence, browserSessionPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, writeBatch, onSnapshot, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendEmailVerification, setPersistence, browserSessionPersistence, browserLocalPersistence, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup, deleteUser } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, deleteDoc, writeBatch, onSnapshot, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
   import { getDatabase, ref, set, remove, onValue, onDisconnect, serverTimestamp as rtdbServerTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+  import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyB4mHBxFdDDhIZCcFcpBqQXdBc2NgkMwxw",
@@ -1957,7 +2071,7 @@
     // of Firebase Console > Build > Realtime Database once you've created
     // the database. Looks like:
     //   https://agrimarket-sl-default-rtdb.<region>.firebasedatabase.app
-    databaseURL: "https://agrimarket-sl-default-rtdb.firebaseio.com/",
+    databaseURL: "https://agrimarket-sl-default-rtdb.firebaseio.com",
     projectId: "agrimarket-sl",
     storageBucket: "agrimarket-sl.firebasestorage.app",
     messagingSenderId: "692088926578",
@@ -1989,6 +2103,12 @@
   } catch (err) {
     console.warn('Realtime Database failed to initialize — online/typing status will be unavailable. Make sure it is enabled in the Firebase console and databaseURL is set correctly.', err);
   }
+  let storage = null;
+  try {
+    storage = getStorage(app);
+  } catch (err) {
+    console.warn('Firebase Storage failed to initialize — profile photo upload will be unavailable.', err);
+  }
 
   // Google Sign-In provider, shared with app.js via window.googleProvider
   // so the "Continue with Google" buttons in the auth modal can use it.
@@ -2015,7 +2135,9 @@
       window.firebaseAuth = auth;
       window.firebaseDb = db;
       window.firebaseRtdb = rtdb;
+      window.firebaseStorage = storage;
       window.rtdbFns = { ref, set, remove, onValue, onDisconnect, serverTimestamp: rtdbServerTimestamp };
+      window.storageFns = { ref: storageRef, uploadBytes, getDownloadURL, deleteObject };
       window.authFns = {
         onAuthStateChanged,
         signInWithEmailAndPassword,
@@ -2030,7 +2152,11 @@
         sendEmailVerification,
         setPersistence,
         browserSessionPersistence,
-        browserLocalPersistence
+        browserLocalPersistence,
+        EmailAuthProvider,
+        reauthenticateWithCredential,
+        reauthenticateWithPopup,
+        deleteUser
       };
       window.dbFns = {
         collection,
@@ -2043,6 +2169,7 @@
         doc,
         setDoc,
         getDoc,
+        deleteDoc,
         writeBatch,
         onSnapshot,
         arrayUnion,
