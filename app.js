@@ -2321,7 +2321,7 @@ profileForm?.addEventListener('submit', async (e) => {
 
         // Refresh the navbar greeting/avatar immediately if the name
         // changed, rather than waiting for the next sign-in.
-        if (nameChanged) await renderAuthedNav(user);
+        if (nameChanged) await window.renderAuthedNav?.(user);
 
         triggerToast('Profile updated.');
     } catch (err) {
@@ -2440,7 +2440,7 @@ document.getElementById('profileAvatarInput')?.addEventListener('change', async 
         await setDoc(doc(db, 'users', user.uid), { photo_url: dataUrl }, { merge: true });
 
         if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${dataUrl}" alt="Profile photo">`;
-        await renderAuthedNav(user); // updates the navbar avatar too
+        await window.renderAuthedNav?.(user); // updates the navbar avatar too
         triggerToast('Profile photo updated.');
     } catch (err) {
         console.error('Failed to save profile photo', err);
@@ -2626,6 +2626,12 @@ async function initApp() {
             }
         });
     }
+    // Exposed globally so handlers defined outside initApp's scope (the
+    // profile-edit form submit and the avatar upload handler, both declared
+    // at module top-level below) can refresh the navbar without a
+    // ReferenceError. Internal calls within initApp keep using the plain
+    // `renderAuthedNav(...)` reference above.
+    window.renderAuthedNav = renderAuthedNav;
 
     // Auth state observer
     onAuthStateChanged(auth, async (user) => {
