@@ -1952,6 +1952,7 @@
             const container = document.getElementById('staticPageContainer');
             const content = document.getElementById('staticContent');
             const dashboard = document.getElementById('dashboardApp');
+            const profile = document.getElementById('profileView');
 
             if (pageContents[page]) {
                 content.innerHTML = pageContents[page];
@@ -1959,25 +1960,38 @@
                 content.innerHTML = '<h2>Page Not Found</h2><p>The requested page could not be found. <a href="#" onclick="goBackFromStatic(); return false;">Go back</a></p>';
             }
 
-            // Remember whether the dashboard (logged-in view) or the landing
-            // page was showing *before* we navigate away — we're about to
-            // hide dashboardApp too, so without this the Back button can no
-            // longer tell the two apart and always falls back to the landing
-            // page, even for a logged-in user.
-            container.dataset.previousView = (dashboard.style.display !== 'none') ? 'dashboard' : 'landing';
+            // Remember whether the profile page, the dashboard (logged-in
+            // view), or the landing page was showing *before* we navigate
+            // away — we're about to hide all three, so without this the
+            // Back button can't tell them apart and always falls back to
+            // the landing page, even if the user was on their profile.
+            // Checked in this order since profileView and dashboardApp can
+            // both have leftover non-'none' display values at once if a
+            // previous navigation didn't clean up — profile takes priority
+            // since it's the more specific/recent view a user would be on.
+            if (profile && profile.style.display !== 'none') {
+                container.dataset.previousView = 'profile';
+            } else if (dashboard.style.display !== 'none') {
+                container.dataset.previousView = 'dashboard';
+            } else {
+                container.dataset.previousView = 'landing';
+            }
 
-            // Hide landing and dashboard
+            // Hide landing, dashboard, and profile — all three are
+            // full-page views and only one should ever be visible at once.
             document.getElementById('landingPage').style.display = 'none';
             document.getElementById('landingSections').style.display = 'none';
             dashboard.style.display = 'none';
+            if (profile) profile.style.display = 'none';
 
             // Show static page
             container.style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
 
-        // Smart "Back" button — returns to whichever view (landing or
-        // dashboard) was active before showPage() navigated away from it.
+        // Smart "Back" button — returns to whichever view (profile,
+        // dashboard, or landing) was active before showPage() navigated
+        // away from it.
         function goBackFromStatic() {
             const container = document.getElementById('staticPageContainer');
             container.style.display = 'none';
@@ -1985,7 +1999,12 @@
             const dashboard = document.getElementById('dashboardApp');
             const landing = document.getElementById('landingPage');
 
-            if (container.dataset.previousView === 'dashboard') {
+            if (container.dataset.previousView === 'profile' && window.showProfileView && window.firebaseAuth?.currentUser) {
+                window.showProfileView(window.firebaseAuth.currentUser);
+            } else if (container.dataset.previousView === 'dashboard' || container.dataset.previousView === 'profile') {
+                // Falls back here if we were on the profile page but the
+                // user signed out in the meantime (no current user to pass
+                // to showProfileView) — dashboard is the closest sane view.
                 dashboard.style.display = 'block';
             } else {
                 landing.style.display = '';
@@ -1997,6 +2016,32 @@
 
         // Wire up the back button
         document.getElementById('backFromStatic').addEventListener('click', goBackFromStatic);
+
+        // BUGFIX: .float-in is a CSS entrance animation (fade + slide up).
+        // CSS animations replay from the start every time an element goes
+        // from display:none back to visible — so #landingPage, the
+        // dashboard header/main, and the profile header/main were all
+        // re-playing their "float up" animation every single time footer
+        // navigation (Quick Links, Back button, Privacy/Terms/Support/
+        // Contact) hid and re-showed them. That's the "shifting" effect:
+        // it's not a bug in the show/hide logic itself, it's this animation
+        // replaying on every re-display.
+        //
+        // Modals intentionally keep their own .float-in (a "pop in" each
+        // time a modal opens is expected UX, unlike full-page navigation),
+        // so this only targets the page-level containers that footer links
+        // actually toggle.
+        function playEntranceOnce(el) {
+            if (!el) return;
+            el.addEventListener('animationend', () => el.classList.remove('float-in'), { once: true });
+        }
+        [
+            '#landingPage',
+            '#dashboardApp > .dashboard-header',
+            '#dashboardApp > main.container',
+            '#profileView > .dashboard-header',
+            '#profileView > main.container'
+        ].forEach((selector) => playEntranceOnce(document.querySelector(selector)));
 
         // Footer Quick Links / Services links point at marketing sections
         // that live on the landing page (About, Services, How It Works,
@@ -2036,11 +2081,16 @@
                     staticContainer.style.display = 'none';
                 }
 
-                // If the dashboard is open, switch to the landing page so the
-                // target section is actually visible to scroll to.
+                // If the dashboard or profile page is open, switch to the
+                // landing page so the target section is actually visible
+                // to scroll to.
                 const dashboard = document.getElementById('dashboardApp');
                 if (dashboard.style.display !== 'none') {
                     dashboard.style.display = 'none';
+                }
+                const profile = document.getElementById('profileView');
+                if (profile && profile.style.display !== 'none') {
+                    profile.style.display = 'none';
                 }
                 document.getElementById('landingPage').style.display = '';
                 document.getElementById('landingSections').style.display = 'block';
