@@ -397,8 +397,66 @@ button { font-family: 'Inter', sans-serif; }
 .checkbox-label { display: flex !important; align-items: center; gap: 0.5rem; font-size: 0.9rem; font-weight: 500 !important; cursor: pointer; margin-bottom: 0 !important; }
 .checkbox-label input[type="checkbox"] { width: auto; accent-color: var(--sl-blue); cursor: pointer; }
 
+/* --- Profile management --- */
+.nav-profile-pill { display: inline-flex; align-items: center; gap: 0.5rem; background: transparent; border: 2px solid transparent; padding: 0.3rem 0.7rem 0.3rem 0.3rem; border-radius: 999px; cursor: pointer; font-weight: 600; color: var(--text-dark, #1e293b); font-size: 0.92rem; transition: 0.2s; }
+.nav-profile-pill:hover { background: #f1f5f9; border-color: var(--border); }
+.nav-profile-pill .chat-avatar-circle { width: 30px; height: 30px; font-size: 0.7rem; }
+.nav-profile-pill .avatar-photo { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; display: block; }
+.profile-modal-content { max-width: 480px; }
+.profile-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.6rem; padding-bottom: 1.4rem; border-bottom: 1px solid var(--border); }
+.profile-avatar-lg .chat-avatar-circle { width: 64px; height: 64px; font-size: 1.3rem; }
+.profile-avatar-lg .avatar-photo { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; display: block; }
+.profile-header-text h3 { margin: 0 0 0.3rem; font-size: 1.15rem; color: var(--text-dark, #1e293b); }
+.profile-role-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--sl-blue); background: #e0f2fe; padding: 0.2rem 0.6rem; border-radius: 999px; }
+.profile-section-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 1.4rem 0 0.8rem; }
+.profile-section-label:first-of-type { margin-top: 0; }
+.profile-static-field { margin-bottom: 1.1rem; }
+.profile-static-label { display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 0.3rem; }
+.profile-static-value { display: flex; align-items: center; gap: 0.5rem; color: var(--text-muted); font-size: 0.92rem; }
+.profile-verified-badge { font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px; }
+.profile-verified-badge-yes { color: #15803d; background: #dcfce7; }
+.profile-verified-badge-no { color: #b45309; background: #fef3c7; }
+.profile-change-password-btn { margin-bottom: 1rem; }
+
+/* --- Full-page profile view --- */
+.profile-page-topbar { display: flex; align-items: center; gap: 1rem; }
+.profile-page-title { margin: 0; font-size: 1.3rem; }
+.profile-page { max-width: 980px; }
+.profile-page-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 1.6rem; margin-bottom: 1.4rem; }
+.profile-header-card { display: flex; align-items: center; gap: 1.2rem; }
+.profile-page-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
+.profile-page-grid .profile-page-card { margin-bottom: 0; }
+.profile-activity-card, .profile-danger-card { grid-column: 1 / -1; }
+@media (max-width: 760px) {
+    .profile-page-grid { grid-template-columns: 1fr; }
+}
+
+.profile-avatar-upload-wrap { position: relative; flex-shrink: 0; }
+.profile-avatar-upload-btn { position: absolute; right: -4px; bottom: -4px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; background: var(--sl-blue); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.75rem; }
+.profile-avatar-upload-btn:hover { filter: brightness(1.1); }
+
+.profile-activity-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
+.profile-stat { text-align: center; padding: 0.9rem 0.5rem; background: var(--bg-subtle, #f8fafc); border-radius: 10px; }
+.profile-stat-value { display: block; font-size: 1.4rem; font-weight: 800; color: var(--sl-blue); }
+.profile-stat-label { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.2rem; }
+@media (max-width: 520px) {
+    .profile-activity-stats { grid-template-columns: repeat(2, 1fr); }
+}
+.profile-recent-chats { display: flex; flex-direction: column; gap: 0.5rem; }
+.profile-recent-chat-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); background: none; text-align: left; cursor: pointer; width: 100%; }
+.profile-recent-chat-row:hover { background: var(--bg-subtle, #f8fafc); }
+.profile-recent-chat-name { font-weight: 600; font-size: 0.9rem; }
+.profile-recent-chat-preview { font-size: 0.82rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.profile-danger-card { border-color: #fecaca; background: #fff7f7; }
+.profile-danger-label { color: #b91c1c !important; }
+.profile-danger-text { color: #7f1d1d; font-size: 0.9rem; margin: 0.4rem 0 1rem; }
+.profile-delete-btn { background: #dc2626; color: #fff; border: none; }
+.profile-delete-btn:hover { background: #b91c1c; }
+
 .auth-link { color: var(--sl-blue); text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: color 0.2s; }
 .auth-link:hover { color: var(--sl-blue-dark); text-decoration: underline; }
+button.auth-link { background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; }
 
 /* Google Sign-In button + divider, used on both auth modal tabs */
 .btn-google {
