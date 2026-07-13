@@ -109,22 +109,23 @@ async function getFirstName(user) {
     return user?.email ? user.email.split('@')[0] : 'there';
 }
 
-// Resolves the photo to show for a user. Real Auth photoURLs (e.g. from
-// Google Sign-In) take priority; otherwise falls back to the base64
-// photo_url saved on the user's Firestore doc by the avatar upload flow
-// (see "Profile photo upload" below), since that flow intentionally does
-// not set user.photoURL.
+// Resolves the photo to show for a user. A custom uploaded photo (the
+// base64 photo_url saved on the user's Firestore doc by the avatar upload
+// flow, see "Profile photo upload" below) always takes priority — otherwise
+// a signed-in Google user's uploaded photo would never show, since Google
+// Sign-In sets user.photoURL to their Google account photo by default and
+// that flow intentionally never overwrites it. Falls back to user.photoURL
+// (e.g. the Google photo) only when no custom upload exists.
 async function getAvatarPhotoUrl(user) {
-    if (user?.photoURL) return user.photoURL;
     try {
         const { doc, getDoc } = window.dbFns;
         const db = window.firebaseDb;
         const snap = await getDoc(doc(db, 'users', user.uid));
-        if (snap.exists()) return snap.data().photo_url || '';
+        if (snap.exists() && snap.data().photo_url) return snap.data().photo_url;
     } catch (err) {
         console.warn('Could not look up stored profile photo', err);
     }
-    return '';
+    return user?.photoURL || '';
 }
 
 function triggerToast(message) {
@@ -2187,17 +2188,13 @@ async function loadProfileView(user) {
     let profileData = {};
     try {
         const snap = await getDoc(doc(db, 'users', user.uid));
-        console.log('[avatar-load] doc exists?', snap.exists(), 'uid:', user.uid);
         if (snap.exists()) profileData = snap.data();
-        console.log('[avatar-load] profileData.photo_url present?', !!profileData.photo_url, 'length:', profileData.photo_url?.length);
     } catch (err) {
         console.warn('Could not load profile', err);
-        console.log('[avatar-load] getDoc FAILED:', err);
     }
 
     const displayName = user.displayName || profileData.full_name || '';
-    const photoUrl = user.photoURL || profileData.photo_url || '';
-    console.log('[avatar-load] user.photoURL:', user.photoURL, '| final photoUrl used, length:', photoUrl.length);
+    const photoUrl = profileData.photo_url || user.photoURL || '';
 
     // Header
     const avatarEl = document.getElementById('profileAvatarLg');
@@ -2407,38 +2404,31 @@ document.getElementById('profileAvatarUploadBtn')?.addEventListener('click', () 
 });
 
 document.getElementById('profileAvatarInput')?.addEventListener('change', async (e) => {
-    console.log('[avatar] change event fired');
     const file = e.target.files?.[0];
     e.target.value = ''; // allow re-selecting the same file later
-    if (!file) { console.log('[avatar] no file selected, stopping'); return; }
-    console.log('[avatar] file picked:', file.name, file.type, file.size);
+    if (!file) return;
 
     const user = window.firebaseAuth?.currentUser;
-    if (!user) { console.log('[avatar] no signed-in user, stopping'); return; }
+    if (!user) return;
 
     if (!file.type.startsWith('image/')) {
-        console.log('[avatar] rejected: not an image type');
         triggerToast('Please choose an image file.');
         return;
     }
     if (file.size > 5 * 1024 * 1024) {
-        console.log('[avatar] rejected: file over 5MB');
         triggerToast('Image must be under 5MB.');
         return;
     }
 
     const avatarEl = document.getElementById('profileAvatarLg');
-    console.log('[avatar] avatarEl found?', !!avatarEl);
     const previousHtml = avatarEl?.innerHTML;
     // Show the picked image immediately (before resizing/saving finishes) so
     // the UI feels instant; reverts to the previous avatar if it fails.
     const localPreviewUrl = URL.createObjectURL(file);
     if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${localPreviewUrl}" alt="Profile photo">`;
-    console.log('[avatar] local preview set');
 
     try {
         const dataUrl = await resizeImageToDataUrl(file);
-        console.log('[avatar] resized, dataUrl length:', dataUrl.length);
 
         // ~1.37 bytes per base64 char; bail out rather than risk a Firestore
         // write failure if something unusually large slips through.
@@ -2448,16 +2438,13 @@ document.getElementById('profileAvatarInput')?.addEventListener('change', async 
 
         const db = window.firebaseDb;
         const { doc, setDoc } = window.dbFns;
-        console.log('[avatar] writing to Firestore, uid:', user.uid);
         await setDoc(doc(db, 'users', user.uid), { photo_url: dataUrl }, { merge: true });
-        console.log('[avatar] Firestore write complete');
 
         if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${dataUrl}" alt="Profile photo">`;
         await window.renderAuthedNav?.(user); // updates the navbar avatar too
-        console.log('[avatar] navbar refreshed, done');
         triggerToast('Profile photo updated.');
     } catch (err) {
-        console.error('[avatar] FAILED:', err);
+        console.error('Failed to save profile photo', err);
         triggerToast(err?.message || mapFirebaseError(err));
         if (avatarEl && previousHtml) avatarEl.innerHTML = previousHtml;
     } finally {
