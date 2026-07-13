@@ -2180,6 +2180,11 @@ function showProfileView(user) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     loadProfileView(user);
 }
+// Exposed globally so the footer navigation logic in index.html (showPage,
+// goBackFromStatic) can restore the profile view after visiting a static
+// page like Privacy/Terms/Support/Contact, the same way window.showDashboardView
+// already lets it restore the dashboard.
+window.showProfileView = showProfileView;
 
 async function loadProfileView(user) {
     const db = window.firebaseDb;
