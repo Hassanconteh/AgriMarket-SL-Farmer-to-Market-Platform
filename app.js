@@ -2403,31 +2403,38 @@ document.getElementById('profileAvatarUploadBtn')?.addEventListener('click', () 
 });
 
 document.getElementById('profileAvatarInput')?.addEventListener('change', async (e) => {
+    console.log('[avatar] change event fired');
     const file = e.target.files?.[0];
     e.target.value = ''; // allow re-selecting the same file later
-    if (!file) return;
+    if (!file) { console.log('[avatar] no file selected, stopping'); return; }
+    console.log('[avatar] file picked:', file.name, file.type, file.size);
 
     const user = window.firebaseAuth?.currentUser;
-    if (!user) return;
+    if (!user) { console.log('[avatar] no signed-in user, stopping'); return; }
 
     if (!file.type.startsWith('image/')) {
+        console.log('[avatar] rejected: not an image type');
         triggerToast('Please choose an image file.');
         return;
     }
     if (file.size > 5 * 1024 * 1024) {
+        console.log('[avatar] rejected: file over 5MB');
         triggerToast('Image must be under 5MB.');
         return;
     }
 
     const avatarEl = document.getElementById('profileAvatarLg');
+    console.log('[avatar] avatarEl found?', !!avatarEl);
     const previousHtml = avatarEl?.innerHTML;
     // Show the picked image immediately (before resizing/saving finishes) so
     // the UI feels instant; reverts to the previous avatar if it fails.
     const localPreviewUrl = URL.createObjectURL(file);
     if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${localPreviewUrl}" alt="Profile photo">`;
+    console.log('[avatar] local preview set');
 
     try {
         const dataUrl = await resizeImageToDataUrl(file);
+        console.log('[avatar] resized, dataUrl length:', dataUrl.length);
 
         // ~1.37 bytes per base64 char; bail out rather than risk a Firestore
         // write failure if something unusually large slips through.
@@ -2437,13 +2444,16 @@ document.getElementById('profileAvatarInput')?.addEventListener('change', async 
 
         const db = window.firebaseDb;
         const { doc, setDoc } = window.dbFns;
+        console.log('[avatar] writing to Firestore, uid:', user.uid);
         await setDoc(doc(db, 'users', user.uid), { photo_url: dataUrl }, { merge: true });
+        console.log('[avatar] Firestore write complete');
 
         if (avatarEl) avatarEl.innerHTML = `<img class="avatar-photo" src="${dataUrl}" alt="Profile photo">`;
         await window.renderAuthedNav?.(user); // updates the navbar avatar too
+        console.log('[avatar] navbar refreshed, done');
         triggerToast('Profile photo updated.');
     } catch (err) {
-        console.error('Failed to save profile photo', err);
+        console.error('[avatar] FAILED:', err);
         triggerToast(err?.message || mapFirebaseError(err));
         if (avatarEl && previousHtml) avatarEl.innerHTML = previousHtml;
     } finally {
