@@ -18,6 +18,27 @@ html {
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
 
+/* Migrated from Font Awesome (icon font, sized via font-size) to Lucide
+   (SVG icons, sized via width/height attributes). These two rules make
+   Lucide icons behave the same way Font Awesome's did everywhere in this
+   file without needing to touch every individual icon's size:
+     - .lucide is the class Lucide's createIcons() adds to every icon it
+       renders, so this covers all of them automatically.
+     - .brand-icon is the class used on the handful of inline SVG brand
+       logos (Facebook, X, WhatsApp, Google) that replaced Font Awesome's
+       fa-brands icons — Lucide 1.0 dropped brand/trademarked logos, so
+       those four are plain hand-written SVGs instead, sized the same way. */
+svg.lucide,
+svg.brand-icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    flex-shrink: 0;
+}
+svg.brand-icon {
+    fill: currentColor;
+}
+
 body {
     display: flex;
     flex-direction: column;
