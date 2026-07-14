@@ -329,13 +329,13 @@ function renderListings(listings, append = false) {
             <img src="${imageUrl}" alt="${name}" class="card-img" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}'">
             <div class="card-content">
                 <div class="badge-row">
-                    ${location ? `<span class="badge badge-location"><i class="fa-solid fa-location-dot"></i> ${location}</span>` : ''}
+                    ${location ? `<span class="badge badge-location"><i data-lucide="map-pin"></i> ${location}</span>` : ''}
                     ${category ? `<span class="badge badge-category">${category}</span>` : ''}
                 </div>
                 <h3 class="card-title">${name}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
-                <button type="button" class="btn-contact" data-crop-id="${cropId}"><i class="fa-solid fa-phone"></i> Contact Farmer</button>
-                ${showMessageSeller ? `<button type="button" class="btn-message-seller" data-action="message-seller" data-id="${cropId}"><i class="fa-solid fa-comment-dots"></i> Message Seller</button>` : ''}
+                <button type="button" class="btn-contact" data-crop-id="${cropId}"><i data-lucide="phone"></i> Contact Farmer</button>
+                ${showMessageSeller ? `<button type="button" class="btn-message-seller" data-action="message-seller" data-id="${cropId}"><i data-lucide="message-circle"></i> Message Seller</button>` : ''}
                 ${isAdminViewing ? `
                 <div class="admin-card-actions">
                     <button type="button" class="btn-manage" data-action="return-to-pending" data-id="${cropId}">Return to Pending</button>
@@ -628,10 +628,10 @@ async function loadMoreCrops() {
 //     }
 
 const NOTIFICATION_ICONS = {
-    info: 'fa-circle-info',
-    success: 'fa-circle-check',
-    warning: 'fa-triangle-exclamation',
-    urgent: 'fa-bell'
+    info: 'info',
+    success: 'circle-check',
+    warning: 'triangle-alert',
+    urgent: 'bell'
 };
 
 let currentNotifications = [];         // last-loaded batch, kept in memory for the dropdown
@@ -735,12 +735,12 @@ function renderNotificationDropdown() {
         const row = document.createElement('div');
         row.className = `notif-row${isUnread ? ' unread' : ''}`;
         row.innerHTML = `
-            <div class="notif-row-icon-wrap notif-icon-${type}"><i class="fa-solid ${NOTIFICATION_ICONS[type]}"></i></div>
+            <div class="notif-row-icon-wrap notif-icon-${type}"><i data-lucide="${NOTIFICATION_ICONS[type]}"></i></div>
             <div class="notif-row-body">
                 <div class="notif-row-title">${isUnread ? '<span class="notif-unread-dot"></span>' : ''}${title}</div>
                 ${message ? `<div class="notif-row-message">${message}</div>` : ''}
                 ${dateStr ? `<div class="notif-row-date">${dateStr}</div>` : ''}
-                ${linkUrl ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="notif-row-link">${linkText} <i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ''}
+                ${linkUrl ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="notif-row-link">${linkText} <i data-lucide="external-link"></i></a>` : ''}
             </div>
         `;
         row.querySelector('.notif-row-link')?.addEventListener('click', (e) => e.stopPropagation());
@@ -887,7 +887,7 @@ async function loadBlogPosts() {
                     <h3>${title}</h3>
                     <p class="blog-meta">${author}${dateStr ? ' · ' + dateStr : ''}</p>
                     <p>${excerpt}</p>
-                    <button type="button" class="blog-read-more">Read more <i class="fa-solid fa-arrow-right"></i></button>
+                    <button type="button" class="blog-read-more">Read more <i data-lucide="arrow-right"></i></button>
                 </div>
             `;
             card.querySelector('.blog-read-more').addEventListener('click', () => openBlogPost(post.id));
@@ -1237,7 +1237,7 @@ function renderPendingApprovals(items) {
             <img src="${imageUrl}" alt="${name}" class="card-img" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}'">
             <div class="card-content">
                 <div class="badge-row">
-                    ${location ? `<span class="badge badge-location"><i class="fa-solid fa-location-dot"></i> ${location}</span>` : ''}
+                    ${location ? `<span class="badge badge-location"><i data-lucide="map-pin"></i> ${location}</span>` : ''}
                     ${category ? `<span class="badge badge-category">${category}</span>` : ''}
                 </div>
                 <h3 class="card-title">${name}</h3>
@@ -1363,12 +1363,12 @@ function renderMySubmissions(items) {
             <div class="card-content">
                 <div class="badge-row">
                     <span class="badge badge-status-${status}">${statusLabel}</span>
-                    ${location ? `<span class="badge badge-location"><i class="fa-solid fa-location-dot"></i> ${location}</span>` : ''}
+                    ${location ? `<span class="badge badge-location"><i data-lucide="map-pin"></i> ${location}</span>` : ''}
                     ${category ? `<span class="badge badge-category">${category}</span>` : ''}
                 </div>
                 <h3 class="card-title">${name}</h3>
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
-                ${adminComment && (status === 'rejected' || status === 'pending') ? `<p class="admin-comment-note"><i class="fa-solid fa-comment-dots"></i> <strong>Admin note:</strong> ${adminComment}</p>` : ''}
+                ${adminComment && (status === 'rejected' || status === 'pending') ? `<p class="admin-comment-note"><i data-lucide="message-circle"></i> <strong>Admin note:</strong> ${adminComment}</p>` : ''}
             </div>
         `;
         mySubmissionsContainer.appendChild(card);
@@ -1552,7 +1552,7 @@ function updateChatEncryptionBadge(isEncrypted) {
     const badge = document.getElementById('chatEncryptionBadge');
     if (!badge) return;
     badge.className = 'chat-encryption-badge ' + (isEncrypted ? 'chat-encryption-badge-on' : 'chat-encryption-badge-off');
-    badge.innerHTML = isEncrypted ? '<i class="fa-solid fa-lock"></i>' : '<i class="fa-solid fa-lock-open"></i>';
+    badge.innerHTML = isEncrypted ? '<i data-lucide="lock"></i>' : '<i data-lucide="unlock"></i>';
     badge.title = isEncrypted
         ? 'End-to-end encrypted — only you and the other person can read these messages'
         : 'Not yet encrypted — waiting for the other person to open the app at least once';
@@ -1819,7 +1819,7 @@ function closeMessagesModal() {
 function setChatMaximizeIcon(isMaximized) {
     const btn = document.getElementById('chatMaximizeBtn');
     if (!btn) return;
-    btn.innerHTML = isMaximized ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
+    btn.innerHTML = isMaximized ? '<i data-lucide="minimize-2"></i>' : '<i data-lucide="maximize-2"></i>';
     btn.setAttribute('aria-label', isMaximized ? 'Restore' : 'Maximize');
 }
 
@@ -1859,7 +1859,7 @@ function renderChatList(uid) {
     if (!chatListContainer) return;
     clearChatListPresence();
     if (!cachedChats.length) {
-        chatListContainer.innerHTML = '<div class="chat-list-empty"><i class="fa-regular fa-comment"></i><p>No conversations yet</p></div>';
+        chatListContainer.innerHTML = '<div class="chat-list-empty"><i data-lucide="message-circle"></i><p>No conversations yet</p></div>';
         return;
     }
     chatListContainer.innerHTML = '';
@@ -2023,7 +2023,7 @@ async function openChatThread(chatId) {
 async function renderChatMessages(msgs, uid, sharedKey) {
     if (!chatMessagesContainer) return;
     if (!msgs.length) {
-        chatMessagesContainer.innerHTML = '<div class="chat-messages-empty"><i class="fa-regular fa-comment-dots"></i><p>Say hello 👋</p></div>';
+        chatMessagesContainer.innerHTML = '<div class="chat-messages-empty"><i data-lucide="message-circle"></i><p>Say hello 👋</p></div>';
         return;
     }
 
@@ -2588,16 +2588,16 @@ async function initApp() {
         const photoUrl = await getAvatarPhotoUrl(user);
         const isAdmin = user.uid === ADMIN_UID;
         navMenu.innerHTML = `
-            ${!isAdmin ? '<button id="navSupportBtn" class="btn-outline" title="Contact Support"><i class="fa-solid fa-headset"></i> Support</button>' : ''}
+            ${!isAdmin ? '<button id="navSupportBtn" class="btn-outline" title="Contact Support"><i data-lucide="headset"></i> Support</button>' : ''}
             <div class="notif-wrapper">
                 <button id="chatBellBtn" class="notif-bell-btn" type="button" aria-label="Messages">
-                    <i class="fa-solid fa-comment-dots"></i>
+                    <i data-lucide="message-circle"></i>
                     <span id="chatBadge" class="notif-badge" hidden>0</span>
                 </button>
             </div>
             <div class="notif-wrapper">
                 <button id="notifBellBtn" class="notif-bell-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Notifications">
-                    <i class="fa-solid fa-bell"></i>
+                    <i data-lucide="bell"></i>
                     <span id="notifBadge" class="notif-badge" hidden>0</span>
                 </button>
                 <div id="notifDropdown" class="notif-dropdown" hidden>
@@ -2608,12 +2608,12 @@ async function initApp() {
                     <div id="notifDropdownList" class="notif-dropdown-list"><div class="notif-dropdown-empty">Loading…</div></div>
                 </div>
             </div>
-            <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i class="fa-solid fa-shop"></i> Marketplace</button>
+            <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i data-lucide="store"></i> Marketplace</button>
             <button id="navProfileBtn" class="nav-profile-pill" type="button" title="Your profile">
                 ${avatarHtml(firstName || user.email || 'User', user.uid, photoUrl)}
                 <span>Hi, ${firstName}</span>
             </button>
-            <button id="navLogoutBtn" class="btn-outline"><i class="fa-solid fa-right-from-bracket"></i> Log Out</button>
+            <button id="navLogoutBtn" class="btn-outline"><i data-lucide="log-out"></i> Log Out</button>
         `;
         document.getElementById('navDashboardBtn').addEventListener('click', showDashboardView);
         document.getElementById('navProfileBtn').addEventListener('click', () => showProfileView(user));
@@ -2672,9 +2672,9 @@ async function initApp() {
             if (addListingBtn) {
                 addListingBtn.hidden = !(isAdmin || isVerifiedFarmer);
                 if (isAdmin) {
-                    addListingBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add Listing';
+                    addListingBtn.innerHTML = '<i data-lucide="plus"></i> Add Listing';
                 } else {
-                    addListingBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Sell Your Crop';
+                    addListingBtn.innerHTML = '<i data-lucide="plus"></i> Sell Your Crop';
                 }
             }
 
