@@ -948,14 +948,21 @@
              remember to call this manually.
          requestAnimationFrame coalesces bursts of DOM insertions (e.g. the
          parser adding many elements at once, or a chat list re-rendering)
-         into a single createIcons() pass instead of one per element. -->
-    <script type="module">
-        import { createIcons, icons } from 'https://cdn.jsdelivr.net/npm/lucide@1.24.0/dist/esm/lucide.mjs';
+         into a single createIcons() pass instead of one per element.
 
+         NOTE: using the UMD build (one pre-bundled file, exposes a global
+         `lucide` object) rather than `import { icons } from '.../lucide.mjs'`.
+         The ESM package re-exports every icon from its own separate file —
+         importing the full icon set that way makes the browser fetch
+         ~1,750 individual files with no bundler to combine them, which is
+         what was actually causing the slow page loads. The UMD build ships
+         all of that pre-bundled into a single ~100KB (gzipped) file. -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide@1.24.0/dist/umd/lucide.min.js"></script>
+    <script>
         let renderScheduled = false;
         function renderLucideIcons() {
             renderScheduled = false;
-            createIcons({ icons });
+            lucide.createIcons();
         }
         function scheduleRender() {
             if (renderScheduled) return;
