@@ -5,6 +5,14 @@
    --primary so the app keeps its agricultural identity while inheriting
    shadcn's restrained borders, focus rings, and spacing.
    =================================================================== */
+
+/* Universal hidden-attribute guard: any element with the [hidden] attribute
+   (set via JS .hidden = true or HTML hidden attr) must not be visible,
+   even when a class like .btn-blue / .kyc-summary applies display:flex.
+   Specific intentional exceptions (e.g. #chatListView) override this with
+   !important on their own selectors. */
+[hidden] { display: none !important; }
+
 :root {
     /* shadcn neutral base (oklch → hex equivalents) */
     --background: #ffffff;
@@ -844,6 +852,485 @@ button.auth-link { background: none; border: none; padding: 0; cursor: pointer; 
 #staticPageContainer h3 { margin-bottom: 0.5rem; color: var(--primary-dark); }
 #staticPageContainer p { line-height: 1.6; margin-bottom: 1rem; color: var(--foreground); }
 
+/* ===================================================================
+   KYC — Mobile Money Verification (shadcn/ui aesthetic)
+   =================================================================== */
+
+/* Profile KYC card */
+.kyc-card { display: flex; flex-direction: column; gap: 1rem; }
+.kyc-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.kyc-subtitle { font-size: 0.85rem; color: var(--muted-foreground); margin-top: 0.3rem; line-height: 1.5; }
+
+/* Status badges — shadcn badge variants with semantic tints */
+.kyc-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.kyc-status-badge::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.kyc-status-not-started {
+    background: var(--muted);
+    color: var(--muted-foreground);
+    border-color: var(--border);
+}
+.kyc-status-not-started::before { background: var(--muted-foreground); }
+.kyc-status-pending {
+    background: color-mix(in srgb, var(--brand-amber) 12%, transparent);
+    color: var(--brand-amber);
+    border-color: color-mix(in srgb, var(--brand-amber) 30%, transparent);
+}
+.kyc-status-pending::before { background: var(--brand-amber); animation: pulse-kyc 1.8s ease-in-out infinite; }
+.kyc-status-approved {
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+    color: var(--primary-dark);
+    border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+}
+.kyc-status-approved::before { background: var(--primary); }
+.kyc-status-rejected {
+    background: color-mix(in srgb, var(--destructive) 12%, transparent);
+    color: var(--destructive);
+    border-color: color-mix(in srgb, var(--destructive) 30%, transparent);
+}
+.kyc-status-rejected::before { background: var(--destructive); }
+@keyframes pulse-kyc { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* KYC summary (shown when application exists) */
+.kyc-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+.kyc-summary[hidden] { display: none; }
+.kyc-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    gap: 1rem;
+}
+.kyc-summary-row:last-child { border-bottom: none; }
+.kyc-summary-label { font-size: 0.8rem; color: var(--muted-foreground); flex-shrink: 0; }
+.kyc-summary-value { font-size: 0.85rem; font-weight: 600; color: var(--foreground); text-align: right; }
+
+.kyc-rejection-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.85rem;
+    background: color-mix(in srgb, var(--destructive) 6%, var(--card));
+    border: 1px solid color-mix(in srgb, var(--destructive) 25%, transparent);
+    border-radius: var(--radius-md);
+    font-size: 0.83rem;
+    color: color-mix(in srgb, var(--destructive) 85%, var(--foreground));
+    line-height: 1.5;
+}
+.kyc-rejection-note i { flex-shrink: 0; margin-top: 0.1rem; font-size: 1rem; }
+.kyc-rejection-note strong { display: block; margin-bottom: 0.2rem; }
+
+.kyc-actions { display: flex; gap: 0.6rem; }
+.kyc-actions .btn-blue { width: 100%; }
+
+/* ===== KYC Application Modal ===== */
+.kyc-modal-content { max-width: 560px; }
+.kyc-modal-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--foreground);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+    letter-spacing: -0.02em;
+}
+.kyc-modal-title i { color: var(--primary); }
+.kyc-modal-desc { font-size: 0.85rem; color: var(--muted-foreground); margin-bottom: 1.25rem; line-height: 1.5; }
+
+/* Step indicator */
+.kyc-steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    padding: 0 0.25rem;
+}
+.kyc-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+}
+.kyc-step-num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    font-weight: 700;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    border: 2px solid var(--border);
+    transition: all 0.2s ease;
+}
+.kyc-step-label { font-size: 0.72rem; color: var(--muted-foreground); font-weight: 500; }
+.kyc-step.active .kyc-step-num {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+}
+.kyc-step.active .kyc-step-label { color: var(--foreground); font-weight: 600; }
+.kyc-step.completed .kyc-step-num {
+    background: color-mix(in srgb, var(--primary) 15%, transparent);
+    color: var(--primary-dark);
+    border-color: var(--primary);
+}
+.kyc-step.completed .kyc-step-label { color: var(--primary-dark); }
+.kyc-step-divider {
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    margin: 0 0.3rem;
+    margin-bottom: 1.2rem;
+    border-radius: 2px;
+    transition: background 0.2s ease;
+}
+.kyc-step-divider.completed { background: var(--primary); }
+
+/* Step panels */
+.kyc-step-panel { display: none; }
+.kyc-step-panel.active { display: block; animation: floatIn 0.25s ease; }
+@keyframes floatIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.kyc-required { color: var(--destructive); font-weight: 700; }
+
+.kyc-nav-buttons {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 1.5rem;
+}
+.kyc-btn-next { margin-left: auto; }
+.kyc-btn-prev, .kyc-btn-next {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* Mobile money provider selector */
+.kyc-provider-label { font-size: 0.85rem; font-weight: 600; color: var(--foreground); margin-bottom: 0.75rem; }
+.kyc-providers { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.kyc-provider-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 1rem 0.75rem;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    background: var(--background);
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+}
+.kyc-provider-card:hover { border-color: var(--ring); background: var(--accent); }
+.kyc-provider-card.selected {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 5%, var(--background));
+}
+.kyc-provider-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #fff;
+}
+.kyc-provider-orange { background: #f97316; }
+.kyc-provider-africell { background: #0066b3; }
+.kyc-provider-qcell { background: #7c3aed; }
+.kyc-provider-name { font-size: 0.85rem; font-weight: 600; color: var(--foreground); }
+.kyc-provider-desc { font-size: 0.72rem; color: var(--muted-foreground); }
+.kyc-provider-check {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    color: var(--primary);
+    font-size: 1.1rem;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+.kyc-provider-card.selected .kyc-provider-check { opacity: 1; }
+
+/* Document upload zones */
+.kyc-upload-zone {
+    position: relative;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    background: var(--muted);
+    margin-bottom: 0.75rem;
+}
+.kyc-upload-zone:hover { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 4%, var(--muted)); }
+.kyc-upload-zone.has-file { border-style: solid; border-color: var(--primary); background: var(--background); padding: 0; }
+.kyc-upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.kyc-upload-placeholder i { font-size: 1.8rem; color: var(--muted-foreground); }
+.kyc-upload-title { font-size: 0.875rem; font-weight: 600; color: var(--foreground); }
+.kyc-upload-optional { font-size: 0.75rem; color: var(--muted-foreground); font-weight: 400; }
+.kyc-upload-hint { font-size: 0.75rem; color: var(--muted-foreground); }
+.kyc-upload-preview { position: relative; }
+.kyc-upload-preview img {
+    width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+    display: block;
+}
+.kyc-upload-remove {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--destructive);
+    color: #fff;
+    border: 2px solid var(--background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-size: 0.8rem;
+}
+.kyc-upload-remove:hover { background: color-mix(in srgb, var(--destructive) 85%, #000); }
+
+/* Review step */
+.kyc-review-section {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.85rem;
+    margin-bottom: 0.75rem;
+    background: var(--muted);
+}
+.kyc-review-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.6rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--foreground);
+}
+.kyc-review-edit {
+    background: none;
+    border: none;
+    color: var(--brand-blue);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0;
+}
+.kyc-review-edit:hover { text-decoration: underline; }
+.kyc-review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.kyc-review-grid > div { display: flex; flex-direction: column; gap: 0.15rem; }
+.kyc-review-label { font-size: 0.72rem; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.03em; }
+.kyc-review-value { font-size: 0.83rem; font-weight: 600; color: var(--foreground); }
+
+.kyc-consent {
+    margin: 1rem 0;
+    padding: 0.85rem;
+    background: color-mix(in srgb, var(--brand-blue) 4%, var(--card));
+    border: 1px solid color-mix(in srgb, var(--brand-blue) 20%, transparent);
+    border-radius: var(--radius-md);
+    font-size: 0.82rem;
+    color: var(--foreground);
+    line-height: 1.5;
+}
+.kyc-consent .checkbox-label { display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; }
+.kyc-consent input[type="checkbox"] { margin-top: 0.2rem; flex-shrink: 0; }
+
+/* ===== Admin KYC Review ===== */
+.kyc-admin-modal { max-width: 600px; }
+.kyc-admin-detail-modal { max-width: 620px; }
+.admin-kyc-list { display: flex; flex-direction: column; gap: 0.6rem; max-height: 60vh; overflow-y: auto; }
+
+.admin-kyc-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.admin-kyc-item:hover { border-color: var(--ring); background: var(--accent); }
+.admin-kyc-item-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--foreground);
+    flex-shrink: 0;
+}
+.admin-kyc-item-body { flex: 1; min-width: 0; }
+.admin-kyc-item-name { font-size: 0.88rem; font-weight: 600; color: var(--foreground); }
+.admin-kyc-item-meta { font-size: 0.76rem; color: var(--muted-foreground); margin-top: 0.15rem; }
+.admin-kyc-item-provider {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    margin-top: 0.3rem;
+}
+.admin-kyc-item-chevron { color: var(--muted-foreground); font-size: 1.1rem; flex-shrink: 0; }
+
+/* Admin KYC detail view */
+.kyc-detail-section {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.85rem;
+    margin-bottom: 0.75rem;
+}
+.kyc-detail-section-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--foreground);
+    margin-bottom: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.kyc-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--border);
+    gap: 1rem;
+    font-size: 0.83rem;
+}
+.kyc-detail-row:last-child { border-bottom: none; }
+.kyc-detail-row span:first-child { color: var(--muted-foreground); flex-shrink: 0; }
+.kyc-detail-row span:last-child { font-weight: 600; color: var(--foreground); text-align: right; }
+
+.kyc-detail-docs { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.kyc-detail-doc {
+    flex: 1;
+    min-width: 180px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--muted);
+}
+.kyc-detail-doc img { width: 100%; max-height: 220px; object-fit: contain; display: block; background: #fff; }
+.kyc-detail-doc-label {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.kyc-detail-actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
+.kyc-detail-actions .btn-approve { flex: 1; }
+.kyc-detail-actions .btn-reject { flex: 1; }
+
+.kyc-reject-reason { margin-bottom: 1rem; }
+.kyc-reject-reason textarea {
+    width: 100%;
+    min-height: 70px;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 0.83rem;
+    resize: vertical;
+    color: var(--foreground);
+    background: var(--background);
+}
+.kyc-reject-reason textarea:focus { outline: none; border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent); }
+
+/* Admin KYC nav button (in navbar) */
+.btn-kyc-admin {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--background);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    padding: 0.45rem 0.8rem;
+    border-radius: var(--radius-md);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+}
+.btn-kyc-admin:hover { border-color: var(--ring); background: var(--accent); }
+.btn-kyc-admin-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--brand-amber);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    line-height: 1;
+    border: 2px solid var(--background);
+}
+.btn-kyc-admin-badge[hidden] { display: none; }
+
 @media (max-width: 768px) {
     .hero h1 { font-size: 2.1rem; }
     .hero p { font-size: 1rem; }
@@ -861,4 +1348,10 @@ button.auth-link { background: none; border: none; padding: 0; cursor: pointer; 
     .auth-action-buttons button { width: 100%; }
     .grid { grid-template-columns: 1fr; }
     .toast-container { right: 10px; left: 10px; bottom: 10px; }
+    .kyc-providers { flex-direction: column; }
+    .kyc-provider-card { min-width: 0; flex-direction: row; text-align: left; padding: 0.75rem; }
+    .kyc-review-grid { grid-template-columns: 1fr; }
+    .kyc-step-label { display: none; }
+    .kyc-detail-docs { flex-direction: column; }
+    .kyc-detail-actions { flex-direction: column; }
 }
