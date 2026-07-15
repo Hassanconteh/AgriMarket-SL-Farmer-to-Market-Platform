@@ -1590,6 +1590,52 @@
                     </button>
                 </section>
 
+                <!-- ===== KYC / Mobile Money Verification ===== -->
+                <section class="profile-page-card kyc-card">
+                    <div class="kyc-card-header">
+                        <div>
+                            <div class="profile-section-label">Mobile Money Verification (KYC)</div>
+                            <p class="kyc-subtitle">Verify your identity to enable payouts via Orange Money, Afrimoney, or Qcell Money.</p>
+                        </div>
+                        <span id="kycStatusBadge" class="kyc-status-badge kyc-status-not-started">Not Started</span>
+                    </div>
+
+                    <div id="kycSummary" class="kyc-summary" hidden>
+                        <div class="kyc-summary-row">
+                            <span class="kyc-summary-label">Provider</span>
+                            <span id="kycSummaryProvider" class="kyc-summary-value">—</span>
+                        </div>
+                        <div class="kyc-summary-row">
+                            <span class="kyc-summary-label">Mobile Money Number</span>
+                            <span id="kycSummaryPhone" class="kyc-summary-value">—</span>
+                        </div>
+                        <div class="kyc-summary-row">
+                            <span class="kyc-summary-label">ID Type</span>
+                            <span id="kycSummaryIdType" class="kyc-summary-value">—</span>
+                        </div>
+                        <div class="kyc-summary-row">
+                            <span class="kyc-summary-label">Submitted</span>
+                            <span id="kycSummaryDate" class="kyc-summary-value">—</span>
+                        </div>
+                        <div id="kycRejectionNote" class="kyc-rejection-note" hidden>
+                            <i data-lucide="message-circle-warning"></i>
+                            <div>
+                                <strong>Your KYC was rejected.</strong>
+                                <span id="kycRejectionText"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="kyc-actions">
+                        <button type="button" id="kycStartBtn" class="btn-full btn-blue">
+                            <i data-lucide="shield-check"></i> Start Verification
+                        </button>
+                        <button type="button" id="kycResubmitBtn" class="btn-full btn-blue" hidden>
+                            <i data-lucide="refresh-cw"></i> Resubmit KYC
+                        </button>
+                    </div>
+                </section>
+
                 <section class="profile-page-card profile-activity-card">
                     <div class="profile-section-label">Activity</div>
                     <div id="profileActivityStats" class="profile-activity-stats">
@@ -1628,6 +1674,231 @@
             <button type="button" id="deleteAccountConfirmBtn" class="btn-full profile-delete-btn">
                 <i data-lucide="trash-2"></i> Permanently Delete My Account
             </button>
+        </div>
+    </div>
+
+    <!-- ===== KYC Application Modal ===== -->
+    <div id="kycModal" class="modal-overlay">
+        <div class="modal-content float-in kyc-modal-content">
+            <button class="close-btn" id="closeKycModal" aria-label="Close"><i data-lucide="x"></i></button>
+            <h3 class="kyc-modal-title"><i data-lucide="shield-check"></i> Mobile Money KYC Verification</h3>
+            <p class="kyc-modal-desc">Complete the steps below to verify your identity and link your mobile money account for payouts.</p>
+
+            <!-- Step indicator -->
+            <div class="kyc-steps">
+                <div class="kyc-step active" data-step="1">
+                    <span class="kyc-step-num">1</span>
+                    <span class="kyc-step-label">Personal</span>
+                </div>
+                <div class="kyc-step-divider"></div>
+                <div class="kyc-step" data-step="2">
+                    <span class="kyc-step-num">2</span>
+                    <span class="kyc-step-label">Provider</span>
+                </div>
+                <div class="kyc-step-divider"></div>
+                <div class="kyc-step" data-step="3">
+                    <span class="kyc-step-num">3</span>
+                    <span class="kyc-step-label">Documents</span>
+                </div>
+                <div class="kyc-step-divider"></div>
+                <div class="kyc-step" data-step="4">
+                    <span class="kyc-step-num">4</span>
+                    <span class="kyc-step-label">Review</span>
+                </div>
+            </div>
+
+            <form id="kycForm" class="auth-form active">
+                <!-- Step 1: Personal Information -->
+                <div class="kyc-step-panel active" data-panel="1">
+                    <div class="form-group">
+                        <label for="kycFullName">Full Legal Name <span class="kyc-required">*</span></label>
+                        <input type="text" id="kycFullName" autocomplete="name" placeholder="As it appears on your ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="kycDob">Date of Birth <span class="kyc-required">*</span></label>
+                        <input type="date" id="kycDob">
+                    </div>
+                    <div class="form-group">
+                        <label for="kycRegion">Region <span class="kyc-required">*</span></label>
+                        <select id="kycRegion">
+                            <option value="">Select your region</option>
+                            <option value="Bo">Bo</option>
+                            <option value="Kenema">Kenema</option>
+                            <option value="Makeni">Makeni</option>
+                            <option value="Western Area">Western Area (Freetown)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="kycAddress">Residential Address <span class="kyc-required">*</span></label>
+                        <input type="text" id="kycAddress" placeholder="e.g., 15 Sanders Street, Freetown">
+                    </div>
+                    <div class="kyc-nav-buttons">
+                        <button type="button" class="btn-outline kyc-btn-next" data-next="2">Continue <i data-lucide="arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Mobile Money Provider -->
+                <div class="kyc-step-panel" data-panel="2">
+                    <div class="kyc-provider-label">Choose your mobile money provider <span class="kyc-required">*</span></div>
+                    <div class="kyc-providers">
+                        <label class="kyc-provider-card" data-provider="orange">
+                            <input type="radio" name="kycProvider" value="orange" hidden>
+                            <div class="kyc-provider-icon kyc-provider-orange">OM</div>
+                            <div class="kyc-provider-name">Orange Money</div>
+                            <div class="kyc-provider-desc">Orange SL</div>
+                            <i data-lucide="check-circle-2" class="kyc-provider-check"></i>
+                        </label>
+                        <label class="kyc-provider-card" data-provider="africell">
+                            <input type="radio" name="kycProvider" value="africell" hidden>
+                            <div class="kyc-provider-icon kyc-provider-africell">AM</div>
+                            <div class="kyc-provider-name">Afrimoney</div>
+                            <div class="kyc-provider-desc">Africell SL</div>
+                            <i data-lucide="check-circle-2" class="kyc-provider-check"></i>
+                        </label>
+                        <label class="kyc-provider-card" data-provider="qcell">
+                            <input type="radio" name="kycProvider" value="qcell" hidden>
+                            <div class="kyc-provider-icon kyc-provider-qcell">QM</div>
+                            <div class="kyc-provider-name">Qcell Money</div>
+                            <div class="kyc-provider-desc">Qcell SL</div>
+                            <i data-lucide="check-circle-2" class="kyc-provider-check"></i>
+                        </label>
+                    </div>
+                    <div class="form-group" style="margin-top: 1.25rem;">
+                        <label for="kycMomoNumber">Mobile Money Account Number <span class="kyc-required">*</span></label>
+                        <input type="tel" id="kycMomoNumber" placeholder="e.g., +23276123456" autocomplete="tel">
+                    </div>
+                    <div class="form-group">
+                        <label for="kycMomoName">Registered Account Name <span class="kyc-required">*</span></label>
+                        <input type="text" id="kycMomoName" placeholder="Name registered with the provider">
+                    </div>
+                    <div class="kyc-nav-buttons">
+                        <button type="button" class="btn-outline kyc-btn-prev" data-prev="1"><i data-lucide="arrow-left"></i> Back</button>
+                        <button type="button" class="btn-outline kyc-btn-next" data-next="3">Continue <i data-lucide="arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Document Upload -->
+                <div class="kyc-step-panel" data-panel="3">
+                    <div class="form-group">
+                        <label for="kycIdType">ID Document Type <span class="kyc-required">*</span></label>
+                        <select id="kycIdType">
+                            <option value="">Select ID type</option>
+                            <option value="national_id">National ID Card</option>
+                            <option value="voter_id">Voter's Registration Card</option>
+                            <option value="driving_license">Driver's License</option>
+                            <option value="passport">Sierra Leone Passport</option>
+                            <option value="nios_card">NASSIT / NIOS Card</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="kycIdNumber">ID Number <span class="kyc-required">*</span></label>
+                        <input type="text" id="kycIdNumber" placeholder="Enter the ID number">
+                    </div>
+
+                    <div class="kyc-upload-zone" id="kycUploadFront">
+                        <input type="file" id="kycIdFrontInput" accept="image/png,image/jpeg,image/webp" hidden>
+                        <div class="kyc-upload-placeholder">
+                            <i data-lucide="upload-cloud"></i>
+                            <span class="kyc-upload-title">Upload front of ID</span>
+                            <span class="kyc-upload-hint">Click to browse — PNG, JPG, or WEBP (max 5MB)</span>
+                        </div>
+                        <div class="kyc-upload-preview" hidden>
+                            <img alt="ID front preview">
+                            <button type="button" class="kyc-upload-remove" data-target="front"><i data-lucide="x"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="kyc-upload-zone" id="kycUploadBack">
+                        <input type="file" id="kycIdBackInput" accept="image/png,image/jpeg,image/webp" hidden>
+                        <div class="kyc-upload-placeholder">
+                            <i data-lucide="upload-cloud"></i>
+                            <span class="kyc-upload-title">Upload back of ID <span class="kyc-upload-optional">(optional)</span></span>
+                            <span class="kyc-upload-hint">Click to browse — PNG, JPG, or WEBP (max 5MB)</span>
+                        </div>
+                        <div class="kyc-upload-preview" hidden>
+                            <img alt="ID back preview">
+                            <button type="button" class="kyc-upload-remove" data-target="back"><i data-lucide="x"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="kyc-nav-buttons">
+                        <button type="button" class="btn-outline kyc-btn-prev" data-prev="2"><i data-lucide="arrow-left"></i> Back</button>
+                        <button type="button" class="btn-outline kyc-btn-next" data-next="4">Continue <i data-lucide="arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Review & Submit -->
+                <div class="kyc-step-panel" data-panel="4">
+                    <div class="kyc-review-section">
+                        <div class="kyc-review-heading">
+                            <span>Personal Information</span>
+                            <button type="button" class="kyc-review-edit" data-edit="1"><i data-lucide="pencil"></i> Edit</button>
+                        </div>
+                        <div class="kyc-review-grid">
+                            <div><span class="kyc-review-label">Full Name</span><span id="reviewFullName" class="kyc-review-value">—</span></div>
+                            <div><span class="kyc-review-label">Date of Birth</span><span id="reviewDob" class="kyc-review-value">—</span></div>
+                            <div><span class="kyc-review-label">Region</span><span id="reviewRegion" class="kyc-review-value">—</span></div>
+                            <div><span class="kyc-review-label">Address</span><span id="reviewAddress" class="kyc-review-value">—</span></div>
+                        </div>
+                    </div>
+                    <div class="kyc-review-section">
+                        <div class="kyc-review-heading">
+                            <span>Mobile Money</span>
+                            <button type="button" class="kyc-review-edit" data-edit="2"><i data-lucide="pencil"></i> Edit</button>
+                        </div>
+                        <div class="kyc-review-grid">
+                            <div><span class="kyc-review-label">Provider</span><span id="reviewProvider" class="kyc-review-value">—</span></div>
+                            <div><span class="kyc-review-label">Account Number</span><span id="reviewMomoNumber" class="kyc-review-value">—</span></div>
+                            <div><span class="kyc-review-label">Account Name</span><span id="reviewMomoName" class="kyc-review-value">—</span></div>
+                        </div>
+                    </div>
+                    <div class="kyc-review-section">
+                        <div class="kyc-review-heading">
+                            <span>Identity Document</span>
+                            <button type="button" class="kyc-review-edit" data-edit="3"><i data-lucide="pencil"></i> Edit</button>
+                        </div>
+                        <div class="kyc-review-grid">
+                            <div><span class="kyc-review-label">ID Type</span><span id="reviewIdType" class="kyc-review-value">—</span></div>
+                            <div><span class="kyc-review-label">ID Number</span><span id="reviewIdNumber" class="kyc-review-value">—</span></div>
+                            <div><span class="kyc-review-label">Front Photo</span><span id="reviewFront" class="kyc-review-value">—</span></div>
+                            <div><span class="kyc-review-label">Back Photo</span><span id="reviewBack" class="kyc-review-value">—</span></div>
+                        </div>
+                    </div>
+                    <div class="kyc-consent">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="kycConsent">
+                            I confirm the information above is accurate and consent to identity verification for mobile money payouts.
+                        </label>
+                    </div>
+                    <div class="kyc-nav-buttons">
+                        <button type="button" class="btn-outline kyc-btn-prev" data-prev="3"><i data-lucide="arrow-left"></i> Back</button>
+                        <button type="submit" class="btn-full btn-green" id="kycSubmitBtn">
+                            <i data-lucide="shield-check"></i> Submit for Verification
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== Admin KYC Review Modal ===== -->
+    <div id="adminKycModal" class="modal-overlay">
+        <div class="modal-content float-in kyc-modal-content kyc-admin-modal">
+            <button class="close-btn" id="closeAdminKycModal" aria-label="Close"><i data-lucide="x"></i></button>
+            <h3 class="kyc-modal-title"><i data-lucide="shield-check"></i> KYC Verification Requests</h3>
+            <p class="kyc-modal-desc">Review identity documents submitted by users for mobile money verification.</p>
+            <div id="adminKycList" class="admin-kyc-list">
+                <p class="text-muted" style="text-align:center; padding: 2rem;">No pending KYC applications.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Admin KYC Detail/Decision Modal ===== -->
+    <div id="adminKycDetailModal" class="modal-overlay">
+        <div class="modal-content float-in kyc-modal-content kyc-admin-detail-modal">
+            <button class="close-btn" id="closeAdminKycDetailModal" aria-label="Close"><i data-lucide="x"></i></button>
+            <h3 class="kyc-modal-title"><i data-lucide="file-search"></i> KYC Application Review</h3>
+            <div id="adminKycDetailContent"></div>
         </div>
     </div>
 
@@ -2177,7 +2448,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendEmailVerification, setPersistence, browserSessionPersistence, browserLocalPersistence, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup, deleteUser } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, deleteDoc, writeBatch, onSnapshot, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, onSnapshot, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
   import { getDatabase, ref, set, remove, onValue, onDisconnect, serverTimestamp as rtdbServerTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
   import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
 
@@ -2286,6 +2557,7 @@
         doc,
         setDoc,
         getDoc,
+        updateDoc,
         deleteDoc,
         writeBatch,
         onSnapshot,
