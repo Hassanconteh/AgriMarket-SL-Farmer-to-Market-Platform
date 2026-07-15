@@ -2232,6 +2232,15 @@ async function loadProfileView(user) {
         : (profileData.created_at ? new Date(profileData.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—');
 
     loadProfileActivity(user.uid);
+
+    // Load KYC status badge + summary (mobile money verification).
+    // Runs a live onSnapshot listener so approval/rejection reflects
+    // immediately without a page reload.
+    try {
+        loadKycStatus(user);
+    } catch (err) {
+        console.warn('KYC status load skipped', err);
+    }
 }
 
 // --- Activity summary: listing counts + a live view of recent conversations ---
@@ -2457,6 +2466,741 @@ document.getElementById('profileAvatarInput')?.addEventListener('change', async 
     }
 });
 
+// ===================================================================
+// KYC — Mobile Money Verification (Orange Money, Afrimoney, Qcell Money)
+// ===================================================================
+//
+// Data model:
+//   users/{uid} → kyc_status: 'not_started' | 'pending' | 'approved' | 'rejected'
+//                 kyc_provider: 'orange' | 'africell' | 'qcell'
+//                 kyc_rejection_reason: string (when rejected)
+//                 kyc_approved_at: timestamp
+//   users/{uid}/kyc_applications/{autoId} → full application snapshot
+//     { full_name, dob, region, address, provider, momo_number,
+//       momo_name, id_type, id_number, id_front_url, id_back_url,
+//       status, submitted_at, reviewed_at, review_note, reviewed_by }
+//
+// ID document images are uploaded to Firebase Storage at:
+//   kyc_documents/{uid}/{timestamp}_{front|back}.jpg
+// using the same resize+compress approach as avatars (so they stay
+// small enough to upload quickly over mobile data), then the
+// download URL is stored in the Firestore application doc.
+//
+// Firestore rules needed (in addition to existing users/{uid} rules):
+//   match /users/{userId}/kyc_applications/{appId} {
+//     allow read: if request.auth.uid == userId
+//                  || request.auth.uid == ADMIN_UID;
+//     allow write: if request.auth.uid == userId; // user creates, admin updates via console or cloud fn
+//   }
+//   // Admin reads all pending KYC: the client queries per-doc using
+//   // a kyc_status == 'pending' filter on the users collection, which
+//   // requires:
+//   match /users/{userId} {
+//     allow read: if request.auth.uid == userId
+//                  || request.auth.uid == ADMIN_UID;
+//     // (write rule stays: auth.uid == userId)
+//   }
+
+const KYC_PROVIDERS = {
+    orange:   { label: 'Orange Money',  short: 'Orange',   color: '#f97316' },
+    africell: { label: 'Afrimoney',     short: 'Africell',  color: '#0066b3' },
+    qcell:    { label: 'Qcell Money',   short: 'Qcell',     color: '#7c3aed' }
+};
+
+const KYC_ID_TYPES = {
+    national_id:      'National ID Card',
+    voter_id:         "Voter's Registration Card",
+    driving_license:  "Driver's License",
+    passport:         'Sierra Leone Passport',
+    nios_card:        'NASSIT / NIOS Card'
+};
+
+const kycModal = document.getElementById('kycModal');
+const kycForm = document.getElementById('kycForm');
+let kycCurrentStep = 1;
+let kycUploadedFiles = { front: null, back: null }; // { file, dataUrl }
+let kycUnsubscribe = null; // onSnapshot listener for live status updates
+
+// --- KYC status loader — called from loadProfileView() ---
+async function loadKycStatus(user) {
+    const db = window.firebaseDb;
+    const { doc, getDoc } = window.dbFns;
+
+    let kycStatus = 'not_started';
+    let kycData = {};
+
+    try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) {
+            kycStatus = snap.data().kyc_status || 'not_started';
+            kycData = snap.data();
+        }
+    } catch (err) {
+        console.warn('Could not load KYC status', err);
+    }
+
+    renderKycStatus(kycStatus, kycData);
+
+    // Set up a real-time listener so the status updates live if the
+    // admin approves/rejects while the user is viewing their profile.
+    if (kycUnsubscribe) kycUnsubscribe();
+    try {
+        const { onSnapshot } = window.dbFns;
+        kycUnsubscribe = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                renderKycStatus(data.kyc_status || 'not_started', data);
+            }
+        });
+    } catch (err) {
+        console.warn('Could not set up KYC listener', err);
+    }
+}
+window.loadKycStatus = loadKycStatus;
+
+function renderKycStatus(status, data) {
+    const badge = document.getElementById('kycStatusBadge');
+    const summary = document.getElementById('kycSummary');
+    const startBtn = document.getElementById('kycStartBtn');
+    const resubmitBtn = document.getElementById('kycResubmitBtn');
+    const rejectionNote = document.getElementById('kycRejectionNote');
+    const rejectionText = document.getElementById('kycRejectionText');
+
+    const statusConfig = {
+        'not_started': { label: 'Not Started', class: 'kyc-status-not-started' },
+        'pending':     { label: 'Under Review',  class: 'kyc-status-pending' },
+        'approved':    { label: 'Verified',     class: 'kyc-status-approved' },
+        'rejected':    { label: 'Rejected',     class: 'kyc-status-rejected' }
+    };
+
+    const cfg = statusConfig[status] || statusConfig['not_started'];
+    badge.textContent = cfg.label;
+    badge.className = 'kyc-status-badge ' + cfg.class;
+
+    if (status === 'not_started') {
+        summary.hidden = true;
+        startBtn.hidden = false;
+        resubmitBtn.hidden = true;
+        rejectionNote.hidden = true;
+    } else if (status === 'approved') {
+        summary.hidden = false;
+        startBtn.hidden = true;
+        resubmitBtn.hidden = true;
+        rejectionNote.hidden = true;
+        fillKycSummary(data);
+    } else if (status === 'pending') {
+        summary.hidden = false;
+        startBtn.hidden = true;
+        resubmitBtn.hidden = true;
+        rejectionNote.hidden = true;
+        fillKycSummary(data);
+    } else if (status === 'rejected') {
+        summary.hidden = false;
+        startBtn.hidden = true;
+        resubmitBtn.hidden = false;
+        rejectionNote.hidden = false;
+        rejectionText.textContent = data.kyc_rejection_reason || 'No reason provided. Please review your submission and try again.';
+        fillKycSummary(data);
+    }
+}
+
+function fillKycSummary(data) {
+    const providerLabel = KYC_PROVIDERS[data.kyc_provider]?.label || '—';
+    document.getElementById('kycSummaryProvider').textContent = providerLabel;
+    document.getElementById('kycSummaryPhone').textContent = data.kyc_momo_number || '—';
+    document.getElementById('kycSummaryIdType').textContent = KYC_ID_TYPES[data.kyc_id_type] || data.kyc_id_type || '—';
+
+    const dateEl = document.getElementById('kycSummaryDate');
+    if (data.kyc_submitted_at) {
+        dateEl.textContent = new Date(data.kyc_submitted_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } else if (data.kyc_approved_at) {
+        dateEl.textContent = 'Approved ' + new Date(data.kyc_approved_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } else {
+        dateEl.textContent = '—';
+    }
+}
+
+// --- KYC modal open/close ---
+function openKycModal() {
+    kycCurrentStep = 1;
+    kycUploadedFiles = { front: null, back: null };
+    resetKycForm();
+    goToKycStep(1);
+    if (window.lucide) lucide.createIcons();
+    kycModal.classList.add('active');
+}
+function closeKycModal() {
+    kycModal.classList.remove('active');
+    resetKycForm();
+}
+
+function resetKycForm() {
+    if (kycForm) kycForm.reset();
+    kycUploadedFiles = { front: null, back: null };
+    // Reset provider cards
+    document.querySelectorAll('.kyc-provider-card').forEach(c => c.classList.remove('selected'));
+    // Reset upload zones
+    ['front', 'back'].forEach(side => {
+        const zone = document.getElementById(side === 'front' ? 'kycUploadFront' : 'kycUploadBack');
+        if (zone) {
+            zone.classList.remove('has-file');
+            const placeholder = zone.querySelector('.kyc-upload-placeholder');
+            const preview = zone.querySelector('.kyc-upload-preview');
+            if (placeholder) placeholder.hidden = false;
+            if (preview) preview.hidden = true;
+        }
+    });
+    // Reset consent checkbox
+    const consent = document.getElementById('kycConsent');
+    if (consent) consent.checked = false;
+}
+
+document.getElementById('kycStartBtn')?.addEventListener('click', openKycModal);
+document.getElementById('kycResubmitBtn')?.addEventListener('click', openKycModal);
+document.getElementById('closeKycModal')?.addEventListener('click', closeKycModal);
+kycModal?.addEventListener('click', (e) => { if (e.target === kycModal) closeKycModal(); });
+
+// --- Step navigation ---
+function goToKycStep(step) {
+    kycCurrentStep = step;
+
+    // Update step indicators
+    document.querySelectorAll('.kyc-step').forEach(s => {
+        const sNum = parseInt(s.dataset.step, 10);
+        s.classList.remove('active', 'completed');
+        if (sNum < step) s.classList.add('completed');
+        else if (sNum === step) s.classList.add('active');
+    });
+
+    // Update step dividers
+    document.querySelectorAll('.kyc-step-divider').forEach((d, i) => {
+        d.classList.toggle('completed', i < step - 1);
+    });
+
+    // Show the right panel
+    document.querySelectorAll('.kyc-step-panel').forEach(p => {
+        p.classList.toggle('active', parseInt(p.dataset.panel, 10) === step);
+    });
+
+    if (step === 4) populateReviewStep();
+    if (window.lucide) lucide.createIcons();
+}
+
+document.querySelectorAll('.kyc-btn-next').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const next = parseInt(btn.dataset.next, 10);
+        if (validateKycStep(kycCurrentStep)) goToKycStep(next);
+    });
+});
+document.querySelectorAll('.kyc-btn-prev').forEach(btn => {
+    btn.addEventListener('click', () => goToKycStep(parseInt(btn.dataset.prev, 10)));
+});
+document.querySelectorAll('.kyc-review-edit').forEach(btn => {
+    btn.addEventListener('click', () => goToKycStep(parseInt(btn.dataset.edit, 10)));
+});
+
+function validateKycStep(step) {
+    if (step === 1) {
+        const name = document.getElementById('kycFullName').value.trim();
+        const dob = document.getElementById('kycDob').value;
+        const region = document.getElementById('kycRegion').value;
+        const address = document.getElementById('kycAddress').value.trim();
+        if (!name) return triggerToast('Please enter your full legal name.'), false;
+        if (!dob) return triggerToast('Please enter your date of birth.'), false;
+        if (!region) return triggerToast('Please select your region.'), false;
+        if (!address) return triggerToast('Please enter your residential address.'), false;
+        // Check age >= 18
+        const birthDate = new Date(dob);
+        const age = (new Date() - birthDate) / (365.25 * 24 * 60 * 60 * 1000);
+        if (age < 18) return triggerToast('You must be at least 18 years old to use mobile money services.'), false;
+        if (age > 120) return triggerToast('Please enter a valid date of birth.'), false;
+    }
+    if (step === 2) {
+        const provider = document.querySelector('input[name="kycProvider"]:checked');
+        const momoNumber = document.getElementById('kycMomoNumber').value.trim();
+        const momoName = document.getElementById('kycMomoName').value.trim();
+        if (!provider) return triggerToast('Please select a mobile money provider.'), false;
+        if (!momoNumber) return triggerToast('Please enter your mobile money account number.'), false;
+        if (!momoName) return triggerToast('Please enter the registered account name.'), false;
+        // Basic Sierra Leone phone validation (+232 or 0xx)
+        const phoneClean = momoNumber.replace(/[\s-()]/g, '');
+        if (!/^(\+?232|0)\d{6,8}$/.test(phoneClean)) {
+            return triggerToast('Please enter a valid Sierra Leone phone number (e.g., +23276123456).'), false;
+        }
+    }
+    if (step === 3) {
+        const idType = document.getElementById('kycIdType').value;
+        const idNumber = document.getElementById('kycIdNumber').value.trim();
+        if (!idType) return triggerToast('Please select your ID document type.'), false;
+        if (!idNumber) return triggerToast('Please enter your ID number.'), false;
+        if (!kycUploadedFiles.front) return triggerToast('Please upload the front of your ID document.'), false;
+    }
+    return true;
+}
+
+// --- Provider card selection ---
+document.querySelectorAll('.kyc-provider-card').forEach(card => {
+    card.addEventListener('click', () => {
+        document.querySelectorAll('.kyc-provider-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        const radio = card.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+    });
+});
+
+// --- Document upload handling ---
+['front', 'back'].forEach(side => {
+    const zoneId = side === 'front' ? 'kycUploadFront' : 'kycUploadBack';
+    const inputId = side === 'front' ? 'kycIdFrontInput' : 'kycIdIdBackInput';
+    const zone = document.getElementById(zoneId);
+    const input = document.getElementById(side === 'front' ? 'kycIdFrontInput' : 'kycIdBackInput');
+
+    if (zone) {
+        zone.addEventListener('click', (e) => {
+            if (e.target.closest('.kyc-upload-remove')) return;
+            input?.click();
+        });
+    }
+
+    if (input) {
+        input.addEventListener('change', async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                triggerToast('Please choose an image file (PNG, JPG, or WEBP).');
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                triggerToast('Image must be under 5MB.');
+                return;
+            }
+
+            // Show loading state
+            const placeholder = zone.querySelector('.kyc-upload-placeholder');
+            const preview = zone.querySelector('.kyc-upload-preview');
+            const previewImg = preview.querySelector('img');
+
+            try {
+                // Compress the image for upload (max 1000px, quality 0.7)
+                // — keeps it well under Firestore/Storage limits while
+                // remaining legible for admin review.
+                const dataUrl = await resizeImageToDataUrl(file, 1000, 0.7);
+                kycUploadedFiles[side] = { file, dataUrl };
+
+                previewImg.src = dataUrl;
+                placeholder.hidden = true;
+                preview.hidden = false;
+                zone.classList.add('has-file');
+                if (window.lucide) lucide.createIcons();
+            } catch (err) {
+                console.error('Failed to process ID image', err);
+                triggerToast('Could not read that image. Please try a different file.');
+            }
+        });
+    }
+
+    // Remove uploaded image
+    const removeBtn = zone?.querySelector('.kyc-upload-remove');
+    removeBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        kycUploadedFiles[side] = null;
+        const placeholder = zone.querySelector('.kyc-upload-placeholder');
+        const preview = zone.querySelector('.kyc-upload-preview');
+        placeholder.hidden = false;
+        preview.hidden = true;
+        zone.classList.remove('has-file');
+    });
+});
+
+// --- Review step population ---
+function populateReviewStep() {
+    document.getElementById('reviewFullName').textContent = document.getElementById('kycFullName').value.trim() || '—';
+    document.getElementById('reviewDob').textContent = document.getElementById('kycDob').value || '—';
+    document.getElementById('reviewRegion').textContent = document.getElementById('kycRegion').value || '—';
+    document.getElementById('reviewAddress').textContent = document.getElementById('kycAddress').value.trim() || '—';
+
+    const providerInput = document.querySelector('input[name="kycProvider"]:checked');
+    const providerVal = providerInput?.value;
+    document.getElementById('reviewProvider').textContent = providerVal ? KYC_PROVIDERS[providerVal].label : '—';
+    document.getElementById('reviewMomoNumber').textContent = document.getElementById('kycMomoNumber').value.trim() || '—';
+    document.getElementById('reviewMomoName').textContent = document.getElementById('kycMomoName').value.trim() || '—';
+
+    const idTypeVal = document.getElementById('kycIdType').value;
+    document.getElementById('reviewIdType').textContent = idTypeVal ? KYC_ID_TYPES[idTypeVal] : '—';
+    document.getElementById('reviewIdNumber').textContent = document.getElementById('kycIdNumber').value.trim() || '—';
+    document.getElementById('reviewFront').textContent = kycUploadedFiles.front ? '✓ Uploaded' : '—';
+    document.getElementById('reviewBack').textContent = kycUploadedFiles.back ? '✓ Uploaded' : 'Not provided';
+
+    if (window.lucide) lucide.createIcons();
+}
+
+// --- KYC form submission ---
+kycForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Final validation
+    if (!validateKycStep(1) || !validateKycStep(2) || !validateKycStep(3)) return;
+
+    const consent = document.getElementById('kycConsent');
+    if (!consent.checked) {
+        triggerToast('Please confirm the consent checkbox to submit your KYC application.');
+        return;
+    }
+
+    const user = window.firebaseAuth?.currentUser;
+    if (!user) return;
+
+    const submitBtn = document.getElementById('kycSubmitBtn');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Uploading...';
+    if (window.lucide) lucide.createIcons();
+
+    try {
+        const db = window.firebaseDb;
+        const { doc, setDoc, collection, updateDoc } = window.dbFns;
+        const uid = user.uid;
+        const timestamp = Date.now();
+
+        // Upload ID document images to Firebase Storage
+        const idFrontUrl = await uploadKycDocument(uid, kycUploadedFiles.front, 'front', timestamp);
+        let idBackUrl = null;
+        if (kycUploadedFiles.back) {
+            idBackUrl = await uploadKycDocument(uid, kycUploadedFiles.back, 'back', timestamp);
+        }
+
+        // Collect form data
+        const providerVal = document.querySelector('input[name="kycProvider"]:checked')?.value;
+        const idTypeVal = document.getElementById('kycIdType').value;
+        const applicationData = {
+            uid,
+            full_name: document.getElementById('kycFullName').value.trim(),
+            dob: document.getElementById('kycDob').value,
+            region: document.getElementById('kycRegion').value,
+            address: document.getElementById('kycAddress').value.trim(),
+            email: user.email || '',
+            provider: providerVal,
+            momo_number: document.getElementById('kycMomoNumber').value.trim(),
+            momo_name: document.getElementById('kycMomoName').value.trim(),
+            id_type: idTypeVal,
+            id_number: document.getElementById('kycIdNumber').value.trim(),
+            id_front_url: idFrontUrl,
+            id_back_url: idBackUrl,
+            status: 'pending',
+            submitted_at: new Date().toISOString()
+        };
+
+        // Write the full application to a subcollection
+        const appRef = doc(collection(db, 'users', uid, 'kyc_applications'));
+        await setDoc(appRef, { ...applicationData, app_id: appRef.id });
+
+        // Update the user's top-level doc with KYC status + summary fields
+        // (used by the profile badge, the admin query, and the real-time
+        // listener set up in loadKycStatus).
+        await setDoc(doc(db, 'users', uid), {
+            kyc_status: 'pending',
+            kyc_provider: providerVal,
+            kyc_momo_number: applicationData.momo_number,
+            kyc_id_type: idTypeVal,
+            kyc_submitted_at: applicationData.submitted_at,
+            kyc_rejection_reason: null,
+            kyc_app_id: appRef.id
+        }, { merge: true });
+
+        closeKycModal();
+        triggerToast('KYC application submitted! We will review your documents and notify you of the result.');
+
+        // Reload KYC status to reflect the new state
+        await loadKycStatus(user);
+    } catch (err) {
+        console.error('Failed to submit KYC application', err);
+        triggerToast(err?.message || mapFirebaseError(err) || 'Failed to submit KYC. Please try again.');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+        if (window.lucide) lucide.createIcons();
+    }
+});
+
+// Upload a KYC document image to Firebase Storage and return the download URL.
+// Uses the compressed base64 data URL from resizeImageToDataUrl, converts it
+// to a Blob for uploadBytes. Falls back to storing the data URL directly in
+// Firestore if Storage is unavailable (same pattern as avatars).
+async function uploadKycDocument(uid, fileObj, side, timestamp) {
+    if (!fileObj) return null;
+    const dataUrl = fileObj.dataUrl;
+
+    // Try Firebase Storage first
+    const storage = window.firebaseStorage;
+    const storageFns = window.storageFns;
+    if (storage && storageFns) {
+        try {
+            const { ref: storageRef, uploadBytes, getDownloadURL } = storageFns;
+            const path = `kyc_documents/${uid}/${timestamp}_${side}.jpg`;
+            const storageRefObj = storageRef(storage, path);
+
+            // Convert base64 data URL to Blob
+            const blob = await (await fetch(dataUrl)).blob();
+            await uploadBytes(storageRefObj, blob, { contentType: 'image/jpeg' });
+            return await getDownloadURL(storageRefObj);
+        } catch (err) {
+            console.warn('Storage upload failed, falling back to Firestore data URL', err);
+            // Fall through to Firestore fallback
+        }
+    }
+
+    // Fallback: store the data URL directly in Firestore (as with avatars).
+    // This works but Firestore docs are capped at 1MB — our 1000px/0.7q
+    // compression keeps it comfortably under that.
+    return dataUrl;
+}
+
+// ===================================================================
+// Admin KYC Review
+// ===================================================================
+
+const adminKycModal = document.getElementById('adminKycModal');
+const adminKycDetailModal = document.getElementById('adminKycDetailModal');
+
+function openAdminKycModal() { adminKycModal.classList.add('active'); loadAdminKycList(); }
+function closeAdminKycModal() { adminKycModal.classList.remove('active'); }
+function closeAdminKycDetailModal() { adminKycDetailModal.classList.remove('active'); }
+
+document.getElementById('closeAdminKycModal')?.addEventListener('click', closeAdminKycModal);
+document.getElementById('closeAdminKycDetailModal')?.addEventListener('click', closeAdminKycDetailModal);
+adminKycModal?.addEventListener('click', (e) => { if (e.target === adminKycModal) closeAdminKycModal(); });
+adminKycDetailModal?.addEventListener('click', (e) => { if (e.target === adminKycDetailModal) closeAdminKycDetailModal(); });
+
+// Fetch all users with kyc_status === 'pending' and render the list.
+// This requires the Firestore rule allowing ADMIN_UID to read all user docs.
+async function loadAdminKycList() {
+    const db = window.firebaseDb;
+    const { collection, query, where, getDocs } = window.dbFns;
+    const listEl = document.getElementById('adminKycList');
+
+    listEl.innerHTML = '<p class="text-muted" style="text-align:center; padding: 2rem;">Loading...</p>';
+
+    try {
+        const snap = await getDocs(query(collection(db, 'users'), where('kyc_status', '==', 'pending')));
+        if (snap.empty) {
+            listEl.innerHTML = '<p class="text-muted" style="text-align:center; padding: 2rem;">No pending KYC applications. 🎉</p>';
+            return;
+        }
+
+        listEl.innerHTML = '';
+        snap.docs.forEach(d => {
+            const data = d.data();
+            const uid = d.id;
+            const name = data.full_name || data.kyc_momo_name || data.email || 'Unknown';
+            const providerInfo = KYC_PROVIDERS[data.kyc_provider] || { label: 'Unknown', color: '#666' };
+            const submittedAt = data.kyc_submitted_at ? new Date(data.kyc_submitted_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+            const item = document.createElement('div');
+            item.className = 'admin-kyc-item';
+            item.innerHTML = `
+                <div class="admin-kyc-item-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</div>
+                <div class="admin-kyc-item-body">
+                    <div class="admin-kyc-item-name">${escapeHtml(name)}</div>
+                    <div class="admin-kyc-item-meta">${escapeHtml(data.email || '—')} • Submitted ${submittedAt}</div>
+                    <span class="admin-kyc-item-provider" style="background: ${providerInfo.color}20; color: ${providerInfo.color};">
+                        ${escapeHtml(providerInfo.label)}
+                    </span>
+                </div>
+                <i data-lucide="chevron-right" class="admin-kyc-item-chevron"></i>
+            `;
+            item.addEventListener('click', () => openAdminKycDetail(uid, data));
+            listEl.appendChild(item);
+        });
+        if (window.lucide) lucide.createIcons();
+    } catch (err) {
+        console.error('Failed to load admin KYC list', err);
+        listEl.innerHTML = '<p class="text-muted" style="text-align:center; padding: 2rem;">Could not load KYC applications. Make sure Firestore rules allow admin access.</p>';
+    }
+}
+
+async function openAdminKycDetail(uid, summaryData) {
+    const db = window.firebaseDb;
+    const { doc, getDoc, collection, query, where, orderBy, getDocs, updateDoc } = window.dbFns;
+    const contentEl = document.getElementById('adminKycDetailContent');
+
+    contentEl.innerHTML = '<p class="text-muted" style="text-align:center; padding: 2rem;">Loading application...</p>';
+    adminKycDetailModal.classList.add('active');
+
+    try {
+        // Fetch the full application doc from the subcollection.
+        // Try the most recent one matching the kyc_app_id if available,
+        // otherwise fall back to the latest application.
+        let appData = null;
+        const appId = summaryData.kyc_app_id;
+        if (appId) {
+            const snap = await getDoc(doc(db, 'users', uid, 'kyc_applications', appId));
+            if (snap.exists()) appData = snap.data();
+        }
+        if (!appData) {
+            // Fall back: get the latest application for this user
+            const snap = await getDocs(query(collection(db, 'users', uid, 'kyc_applications'), where('status', '==', 'pending')));
+            if (!snap.empty) appData = snap.docs[snap.docs.length - 1].data();
+        }
+        if (!appData) {
+            contentEl.innerHTML = '<p class="text-muted" style="text-align:center; padding: 2rem;">No application data found.</p>';
+            return;
+        }
+
+        const providerInfo = KYC_PROVIDERS[appData.provider] || { label: appData.provider || '—', color: '#666' };
+        const idTypeLabel = KYC_ID_TYPES[appData.id_type] || appData.id_type || '—';
+
+        // Helper to render an image (either a Storage download URL or a data URL)
+        const docImage = (url, label, icon) => {
+            if (!url) return `<div class="kyc-detail-doc"><div class="kyc-detail-doc-label"><i data-lucide="${icon}"></i> ${label}</div><div style="padding:1.5rem; text-align:center; color: var(--muted-foreground); font-size:0.8rem;">Not provided</div></div>`;
+            // Check if it's a data URL or a Storage URL
+            if (url.startsWith('data:')) {
+                return `<div class="kyc-detail-doc"><div class="kyc-detail-doc-label"><i data-lucide="${icon}"></i> ${label}</div><img src="${escapeHtml(url)}" alt="${label}"></div>`;
+            }
+            return `<div class="kyc-detail-doc"><div class="kyc-detail-doc-label"><i data-lucide="${icon}"></i> ${label}</div><img src="${escapeHtml(url)}" alt="${label}"></div>`;
+        };
+
+        contentEl.innerHTML = `
+            <div class="kyc-detail-section">
+                <div class="kyc-detail-section-title"><i data-lucide="user"></i> Personal Information</div>
+                <div class="kyc-detail-row"><span>Full Name</span><span>${escapeHtml(appData.full_name || '—')}</span></div>
+                <div class="kyc-detail-row"><span>Date of Birth</span><span>${escapeHtml(appData.dob || '—')}</span></div>
+                <div class="kyc-detail-row"><span>Region</span><span>${escapeHtml(appData.region || '—')}</span></div>
+                <div class="kyc-detail-row"><span>Address</span><span>${escapeHtml(appData.address || '—')}</span></div>
+                <div class="kyc-detail-row"><span>Email</span><span>${escapeHtml(appData.email || '—')}</span></div>
+            </div>
+            <div class="kyc-detail-section">
+                <div class="kyc-detail-section-title"><i data-lucide="smartphone"></i> Mobile Money Account</div>
+                <div class="kyc-detail-row"><span>Provider</span><span style="color: ${providerInfo.color};">${escapeHtml(providerInfo.label)}</span></div>
+                <div class="kyc-detail-row"><span>Account Number</span><span>${escapeHtml(appData.momo_number || '—')}</span></div>
+                <div class="kyc-detail-row"><span>Account Name</span><span>${escapeHtml(appData.momo_name || '—')}</span></div>
+            </div>
+            <div class="kyc-detail-section">
+                <div class="kyc-detail-section-title"><i data-lucide="id-card"></i> Identity Document</div>
+                <div class="kyc-detail-row"><span>ID Type</span><span>${escapeHtml(idTypeLabel)}</span></div>
+                <div class="kyc-detail-row"><span>ID Number</span><span>${escapeHtml(appData.id_number || '—')}</span></div>
+                <div class="kyc-detail-docs">
+                    ${docImage(appData.id_front_url, 'Front of ID', 'image')}
+                    ${docImage(appData.id_back_url, 'Back of ID', 'image')}
+                </div>
+            </div>
+            <div id="kycRejectReasonContainer" class="kyc-reject-reason" hidden>
+                <label style="font-size:0.83rem; font-weight:600; color:var(--foreground); display:block; margin-bottom:0.4rem;">Rejection reason (shown to user)</label>
+                <textarea id="kycRejectReasonInput" placeholder="e.g., ID image is blurry, please re-upload a clearer photo."></textarea>
+            </div>
+            <div class="kyc-detail-actions">
+                <button type="button" class="btn-approve" id="kycAdminApproveBtn"><i data-lucide="check"></i> Approve</button>
+                <button type="button" class="btn-reject" id="kycAdminRejectBtn"><i data-lucide="x"></i> Reject</button>
+            </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+
+        // Wire up approve/reject
+        let rejectMode = false;
+        const rejectBtn = document.getElementById('kycAdminRejectBtn');
+        const approveBtn = document.getElementById('kycAdminApproveBtn');
+        const reasonContainer = document.getElementById('kycRejectReasonContainer');
+
+        rejectBtn.addEventListener('click', () => {
+            if (!rejectMode) {
+                rejectMode = true;
+                reasonContainer.hidden = false;
+                rejectBtn.innerHTML = '<i data-lucide="x"></i> Confirm Rejection';
+                if (window.lucide) lucide.createIcons();
+            } else {
+                const reason = document.getElementById('kycRejectReasonInput').value.trim() || 'Your KYC application was rejected. Please review and resubmit.';
+                handleAdminKycDecision(uid, appData.app_id, 'rejected', reason);
+            }
+        });
+
+        approveBtn.addEventListener('click', () => {
+            handleAdminKycDecision(uid, appData.app_id, 'approved', '');
+        });
+    } catch (err) {
+        console.error('Failed to load KYC detail', err);
+        contentEl.innerHTML = '<p class="text-muted" style="text-align:center; padding: 2rem;">Could not load application details.</p>';
+    }
+}
+
+async function handleAdminKycDecision(uid, appId, decision, note) {
+    const db = window.firebaseDb;
+    const { doc, updateDoc, setDoc } = window.dbFns;
+    const adminUid = window.firebaseAuth?.currentUser?.uid;
+    const detailModal = document.getElementById('adminKycDetailModal');
+
+    try {
+        const now = new Date().toISOString();
+
+        // Update the application doc in the subcollection
+        if (appId) {
+            try {
+                await updateDoc(doc(db, 'users', uid, 'kyc_applications', appId), {
+                    status: decision,
+                    reviewed_at: now,
+                    review_note: note,
+                    reviewed_by: adminUid
+                });
+            } catch (err) {
+                // updateDoc may fail if the doc doesn't exist; fall back to setDoc
+                console.warn('updateDoc failed, trying setDoc merge', err);
+                await setDoc(doc(db, 'users', uid, 'kyc_applications', appId), {
+                    status: decision,
+                    reviewed_at: now,
+                    review_note: note,
+                    reviewed_by: adminUid
+                }, { merge: true });
+            }
+        }
+
+        // Update the user's top-level doc
+        const userUpdate = {
+            kyc_status: decision,
+            reviewed_at: now
+        };
+        if (decision === 'approved') {
+            userUpdate.kyc_approved_at = now;
+            userUpdate.kyc_rejection_reason = null;
+        } else {
+            userUpdate.kyc_rejection_reason = note;
+            userUpdate.kyc_approved_at = null;
+        }
+        await setDoc(doc(db, 'users', uid), userUpdate, { merge: true });
+
+        closeAdminKycDetailModal();
+        triggerToast(decision === 'approved' ? 'KYC application approved. The user is now verified.' : 'KYC application rejected. The user has been notified.');
+
+        // Refresh the admin list
+        loadAdminKycList();
+
+        // Update the admin nav badge count
+        await updateAdminKycBadge();
+    } catch (err) {
+        console.error('Failed to update KYC decision', err);
+        triggerToast('Failed to update KYC status. Check Firestore rules for admin access.');
+    }
+}
+
+// Update the admin KYC badge count in the navbar
+async function updateAdminKycBadge() {
+    const badge = document.getElementById('adminKycBadge');
+    if (!badge) return;
+
+    const db = window.firebaseDb;
+    const { collection, query, where, getDocs } = window.dbFns;
+
+    try {
+        const snap = await getDocs(query(collection(db, 'users'), where('kyc_status', '==', 'pending')));
+        const count = snap.size;
+        badge.textContent = count;
+        badge.hidden = count === 0;
+    } catch (err) {
+        console.warn('Could not update KYC badge count', err);
+        badge.hidden = true;
+    }
+}
+window.updateAdminKycBadge = updateAdminKycBadge;
+
 // --- Account deletion ---
 const deleteAccountModal = document.getElementById('deleteAccountModal');
 function closeDeleteAccountModal() {
@@ -2622,6 +3366,15 @@ async function initApp() {
         document.getElementById('navSupportBtn')?.addEventListener('click', () => {
             openOrCreateChat({ otherUid: ADMIN_UID, otherLabel: 'Support', type: 'support' });
         });
+        // Admin-only: open the KYC review panel and keep the pending
+        // count badge live while the admin session is active.
+        const kycAdminBtn = document.getElementById('navKycAdminBtn');
+        if (kycAdminBtn) {
+            kycAdminBtn.addEventListener('click', () => openAdminKycModal());
+            // Kick off the live pending-count badge for this admin session.
+            window.updateAdminKycBadge?.();
+            if (window.lucide) lucide.createIcons();
+        }
         document.getElementById('navLogoutBtn').addEventListener('click', async () => {
             try {
                 await signOut(auth);
