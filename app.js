@@ -317,7 +317,7 @@ function renderListings(listings, append = false) {
         const cropId     = escapeHtml(item.id || '');
 
         const currentUid = window.firebaseAuth?.currentUser?.uid;
-        const isAdminViewing = currentUid === "Hekzmx48mPXukHAcHzQI1Uq7AWW2";
+        const isAdminViewing = currentUid === ADMIN_UID;
         // Hide "Message Seller" on your own listing (nothing to message
         // yourself about) and for signed-out visitors (openOrCreateChat
         // requires being signed in anyway).
@@ -1129,7 +1129,7 @@ async function handleAddListingSubmit(e) {
         return;
     }
 
-    const isAdmin = user.uid === "Hekzmx48mPXukHAcHzQI1Uq7AWW2";
+    const isAdmin = user.uid === ADMIN_UID;
     if (!isAdmin && !user.emailVerified) {
         triggerToast('Please verify your email before submitting a listing.');
         return;
@@ -2205,7 +2205,7 @@ async function loadProfileView(user) {
     const avatarEl = document.getElementById('profileAvatarLg');
     if (avatarEl) avatarEl.innerHTML = avatarHtml(displayName || user.email || 'User', user.uid, photoUrl);
     document.getElementById('profileHeaderName').textContent = displayName || user.email || 'User';
-    const isAdmin = user.uid === "Hekzmx48mPXukHAcHzQI1Uq7AWW2";
+    const isAdmin = user.uid === ADMIN_UID;
     document.getElementById('profileRoleBadge').textContent = isAdmin ? 'Administrator' : 'Member';
 
     // Editable fields
@@ -3316,10 +3316,19 @@ async function initApp() {
     // observer and by the register handler below (registration needs to
     // re-render immediately after setting displayName, since updateProfile()
     // doesn't trigger onAuthStateChanged again on its own).
+    //
+    // FIX: previously this template never actually rendered a
+    // #navKycAdminBtn element, so the admin-only wiring further down
+    // (`document.getElementById('navKycAdminBtn')`) always found nothing
+    // and silently no-opped — there was no way for the admin to open
+    // adminKycModal / loadAdminKycList() from the dashboard. The button is
+    // now rendered here (admin-only), matching the existing
+    // .btn-kyc-admin / .btn-kyc-admin-badge styles and the #adminKycBadge
+    // id that updateAdminKycBadge() already expects.
     async function renderAuthedNav(user) {
         const firstName = escapeHtml(await getFirstName(user));
         const photoUrl = await getAvatarPhotoUrl(user);
-        const isAdmin = user.uid === "Hekzmx48mPXukHAcHzQI1Uq7AWW2";
+        const isAdmin = user.uid === ADMIN_UID;
         navMenu.innerHTML = `
             ${!isAdmin ? '<button id="navSupportBtn" class="btn-outline" title="Contact Support"><i data-lucide="headset"></i> Support</button>' : ''}
             <div class="notif-wrapper">
@@ -3340,10 +3349,12 @@ async function initApp() {
                     </div>
                     <div id="notifDropdownList" class="notif-dropdown-list"><div class="notif-dropdown-empty">Loading…</div></div>
                 </div>
-
-                
-                
             </div>
+            ${isAdmin ? `
+            <button id="navKycAdminBtn" class="btn-kyc-admin" type="button" title="KYC Verification Requests">
+                <i data-lucide="shield-check"></i> KYC
+                <span id="adminKycBadge" class="btn-kyc-admin-badge" hidden>0</span>
+            </button>` : ''}
             <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i data-lucide="store"></i> Marketplace</button>
             <button id="navProfileBtn" class="nav-profile-pill" type="button" title="Your profile">
                 ${avatarHtml(firstName || user.email || 'User', user.uid, photoUrl)}
@@ -3356,7 +3367,7 @@ async function initApp() {
         setupNotificationBell();
         document.getElementById('chatBellBtn').addEventListener('click', () => openMessagesModal());
         document.getElementById('navSupportBtn')?.addEventListener('click', () => {
-            openOrCreateChat({ otherUid: "Hekzmx48mPXukHAcHzQI1Uq7AWW2", otherLabel: 'Support', type: 'support' });
+            openOrCreateChat({ otherUid: ADMIN_UID, otherLabel: 'Support', type: 'support' });
         });
         // Admin-only: open the KYC review panel and keep the pending
         // count badge live while the admin session is active.
@@ -3405,7 +3416,7 @@ async function initApp() {
             // in another tab immediately sees the right buttons here too.
             try { await user.reload(); } catch (err) { console.warn('Could not refresh user before role check', err); }
 
-            const isAdmin = user.uid === "Hekzmx48mPXukHAcHzQI1Uq7AWW2";
+            const isAdmin = user.uid === ADMIN_UID;
             const isVerifiedFarmer = !isAdmin && user.emailVerified;
 
             // The "Add Listing" button serves two roles depending on who's
@@ -3597,7 +3608,7 @@ async function initApp() {
     // Add Listing modal (admin-only — button itself stays hidden for
     // everyone else, see the ADMIN_UID check in the auth-state observer)
     addListingBtn?.addEventListener('click', () => {
-        const isAdmin = window.firebaseAuth?.currentUser?.uid === "Hekzmx48mPXukHAcHzQI1Uq7AWW2";
+        const isAdmin = window.firebaseAuth?.currentUser?.uid === ADMIN_UID;
         if (isAdmin) {
             addListingModalTitle.textContent = 'Add Listing';
             addListingModalSubtitle.textContent = "Creates the public listing and the farmer's contact info together, so contact details are never missing.";
