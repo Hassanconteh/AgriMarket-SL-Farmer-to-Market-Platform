@@ -2470,36 +2470,44 @@ document.getElementById('profileAvatarInput')?.addEventListener('change', async 
 // KYC — Mobile Money Verification (Orange Money, Afrimoney, Qcell Money)
 // ===================================================================
 //
-// Data model:
+// Data model (Firestore only — no Firebase Storage used):
 //   users/{uid} → kyc_status: 'not_started' | 'pending' | 'approved' | 'rejected'
 //                 kyc_provider: 'orange' | 'africell' | 'qcell'
-//                 kyc_rejection_reason: string (when rejected)
+//                 kyc_momo_number: string
+//                 kyc_id_type: string
+//                 kyc_submitted_at: timestamp
 //                 kyc_approved_at: timestamp
+//                 kyc_rejection_reason: string (when rejected)
+//                 kyc_app_id: string (reference to the application doc)
 //   users/{uid}/kyc_applications/{autoId} → full application snapshot
 //     { full_name, dob, region, address, provider, momo_number,
 //       momo_name, id_type, id_number, id_front_url, id_back_url,
 //       status, submitted_at, reviewed_at, review_note, reviewed_by }
 //
-// ID document images are uploaded to Firebase Storage at:
-//   kyc_documents/{uid}/{timestamp}_{front|back}.jpg
-// using the same resize+compress approach as avatars (so they stay
-// small enough to upload quickly over mobile data), then the
-// download URL is stored in the Firestore application doc.
+// ID document images (front + back of ID) are stored as compressed
+// base64 data URLs directly in the Firestore application document
+// (id_front_url / id_back_url fields) — the same approach used for user
+// avatars (photo_url). Images are compressed to 800px max dimension at
+// 0.65 JPEG quality via resizeImageToDataUrl(), which keeps each photo
+// well under Firestore's 1MB document limit. This means NO Firebase
+// Storage rules are needed — only Firestore rules.
 //
 // Firestore rules needed (in addition to existing users/{uid} rules):
 //   match /users/{userId}/kyc_applications/{appId} {
 //     allow read: if request.auth.uid == userId
 //                  || request.auth.uid == ADMIN_UID;
-//     allow write: if request.auth.uid == userId; // user creates, admin updates via console or cloud fn
+//     allow create: if request.auth.uid == userId;
+//     allow update: if request.auth.uid == ADMIN_UID;
+//     allow delete: if false; // preserve audit trail
 //   }
-//   // Admin reads all pending KYC: the client queries per-doc using
-//   // a kyc_status == 'pending' filter on the users collection, which
-//   // requires:
+//   // Admin reads all pending KYC: the client queries the users
+//   // collection with a kyc_status == 'pending' filter, which requires:
 //   match /users/{userId} {
 //     allow read: if request.auth.uid == userId
 //                  || request.auth.uid == ADMIN_UID;
 //     // (write rule stays: auth.uid == userId)
 //   }
+// See firestore_kyc_rules.txt for the complete, copy-paste-ready rules.
 
 const KYC_PROVIDERS = {
     orange:   { label: 'Orange Money',  short: 'Orange',   color: '#f97316' },
@@ -2783,10 +2791,11 @@ document.querySelectorAll('.kyc-provider-card').forEach(card => {
             const previewImg = preview.querySelector('img');
 
             try {
-                // Compress the image for upload (max 1000px, quality 0.7)
-                // — keeps it well under Firestore/Storage limits while
+                // Compress the image for Firestore storage (max 800px, quality 0.65)
+                // — keeps each ID photo well under Firestore's 1MB document limit
+                // (even with front + back + form fields in one doc) while
                 // remaining legible for admin review.
-                const dataUrl = await resizeImageToDataUrl(file, 1000, 0.7);
+                const dataUrl = await resizeImageToDataUrl(file, 800, 0.65);
                 kycUploadedFiles[side] = { file, dataUrl };
 
                 previewImg.src = dataUrl;
@@ -2924,37 +2933,17 @@ kycForm?.addEventListener('submit', async (e) => {
     }
 });
 
-// Upload a KYC document image to Firebase Storage and return the download URL.
-// Uses the compressed base64 data URL from resizeImageToDataUrl, converts it
-// to a Blob for uploadBytes. Falls back to storing the data URL directly in
-// Firestore if Storage is unavailable (same pattern as avatars).
+// Store a KYC document image as a base64 data URL directly in Firestore.
+// Uses the compressed data URL from resizeImageToDataUrl (800px / 0.65q),
+// which keeps each image well under Firestore's 1MB document limit even with
+// both front + back ID photos plus all form fields in one document.
+// This follows the same pattern as user avatars (photo_url) — no Firebase
+// Storage required, simplifying security rules to Firestore-only.
 async function uploadKycDocument(uid, fileObj, side, timestamp) {
     if (!fileObj) return null;
-    const dataUrl = fileObj.dataUrl;
-
-    // Try Firebase Storage first
-    const storage = window.firebaseStorage;
-    const storageFns = window.storageFns;
-    if (storage && storageFns) {
-        try {
-            const { ref: storageRef, uploadBytes, getDownloadURL } = storageFns;
-            const path = `kyc_documents/${uid}/${timestamp}_${side}.jpg`;
-            const storageRefObj = storageRef(storage, path);
-
-            // Convert base64 data URL to Blob
-            const blob = await (await fetch(dataUrl)).blob();
-            await uploadBytes(storageRefObj, blob, { contentType: 'image/jpeg' });
-            return await getDownloadURL(storageRefObj);
-        } catch (err) {
-            console.warn('Storage upload failed, falling back to Firestore data URL', err);
-            // Fall through to Firestore fallback
-        }
-    }
-
-    // Fallback: store the data URL directly in Firestore (as with avatars).
-    // This works but Firestore docs are capped at 1MB — our 1000px/0.7q
-    // compression keeps it comfortably under that.
-    return dataUrl;
+    // The data URL is already compressed at upload-selection time
+    // (see the file-input change handler: resizeImageToDataUrl at 800px/0.65q).
+    return fileObj.dataUrl;
 }
 
 // ===================================================================
