@@ -1068,13 +1068,35 @@ button.auth-link { background: none; border: none; padding: 0; cursor: pointer; 
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid var(--border);
+    padding: 6px;
+}
+.kyc-provider-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.kyc-provider-icon-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 0.95rem;
     font-weight: 800;
     color: #fff;
+    border-radius: calc(var(--radius-md) - 2px);
 }
-.kyc-provider-orange { background: #f97316; }
-.kyc-provider-africell { background: #0066b3; }
-.kyc-provider-qcell { background: #7c3aed; }
+.kyc-provider-icon--fallback {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+.kyc-provider-orange .kyc-provider-icon-fallback { background: #f97316; }
+.kyc-provider-africell .kyc-provider-icon-fallback { background: #0066b3; }
+.kyc-provider-qcell .kyc-provider-icon-fallback { background: #7c3aed; }
 .kyc-provider-name { font-size: 0.85rem; font-weight: 600; color: var(--foreground); }
 .kyc-provider-desc { font-size: 0.72rem; color: var(--muted-foreground); }
 .kyc-provider-check {
