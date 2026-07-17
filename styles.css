@@ -207,7 +207,7 @@ button { font-family: 'Inter', sans-serif; cursor: pointer; }
 .btn-full { width: 100%; margin-top: 1rem; padding: 0.7rem 1rem; }
 
 .hero {
-    background: linear-gradient(rgba(30, 181, 58, 0.85), rgba(0, 114, 198, 0.85)), url('https://images.unsplash.com/photo-1500937386664-56d1dfefcb19?auto=format&fit=crop&w=1600&q=80') center/cover;
+    background: linear-gradient(rgba(22, 163, 74, 0.85), rgba(120, 53, 15, 0.78)), url('https://images.unsplash.com/photo-1500937386664-56d1dfefcb19?auto=format&fit=crop&w=1600&q=80') center/cover;
     color: white;
     text-align: center;
     display: flex;
