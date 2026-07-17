@@ -34,6 +34,8 @@
         }
         .ls-section-alt { background: var(--agri-sand); }
         .ls-section-alt .ls-section { margin: 0 auto; }
+        .ls-section-alt .ls-label { color: var(--agri-earth); }
+        .ls-section-alt .ls-label::before { background: var(--agri-earth); }
 
         .ls-label {
             font-size: 0.75rem;
@@ -67,10 +69,14 @@
             max-width: 600px;
         }
         .ls-divider {
-            height: 1px;
-            background: linear-gradient(to right, transparent, #d1d5db, transparent);
+            height: 28px;
             max-width: 1200px;
             margin: 0 auto;
+            background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2240%22%20height%3D%2228%22%20viewBox%3D%220%200%2040%2028%22%3E%3Cline%20x1%3D%220%22%20y1%3D%2220%22%20x2%3D%2240%22%20y2%3D%2220%22%20stroke%3D%22%2392400e%22%20stroke-width%3D%221.1%22%20opacity%3D%220.3%22/%3E%3Ccircle%20cx%3D%2220%22%20cy%3D%2220%22%20r%3D%221.5%22%20fill%3D%22%2392400e%22%20opacity%3D%220.55%22/%3E%3Cpath%20d%3D%22M20%2020%20L20%2011%22%20stroke%3D%22%2316a34a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20fill%3D%22none%22/%3E%3Cpath%20d%3D%22M20%2012%20C16.5%2012%2014.5%208.5%2015.3%204.5%22%20stroke%3D%22%2316a34a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20fill%3D%22none%22/%3E%3Cpath%20d%3D%22M20%2012%20C23.5%2012%2025.5%208.5%2024.7%204.5%22%20stroke%3D%22%2316a34a%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20fill%3D%22none%22/%3E%3C/svg%3E');
+            background-repeat: repeat-x;
+            background-position: center;
+            -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+            mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
         }
 
         /* About grid */
@@ -104,6 +110,7 @@
             border-radius: 0.75rem;
             padding: 0.75rem 1rem;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-bottom: 2px solid var(--agri-earth);
             display: flex;
             align-items: center;
             gap: 0.6rem;
@@ -125,13 +132,15 @@
         .stat-card {
             text-align: center;
             padding: 1.5rem 1rem;
-            background: white;
+            background: var(--agri-sand);
             border-radius: 0.75rem;
             border: 1px solid #e5e7eb;
+            border-top: 2px solid var(--agri-earth);
             transition: all 0.3s ease;
         }
         .stat-card:hover {
             border-color: var(--agri-green);
+            border-top-color: var(--agri-earth);
             box-shadow: 0 4px 20px rgba(22,163,74,0.1);
             transform: translateY(-2px);
         }
@@ -1147,7 +1156,15 @@
 
             <div class="services-grid">
                 <div class="service-card">
-                    <div class="service-icon service-icon-green"><i data-lucide="tags"></i></div>
+                    <div class="service-icon service-icon-green">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 21C12 21 11 11 13 4"/>
+                            <path d="M12 17L8 15"/><path d="M12 17L16 15"/>
+                            <path d="M12 14L8 12"/><path d="M12 14L16 12"/>
+                            <path d="M12 11L8 9"/><path d="M12 11L16 9"/>
+                            <path d="M12.5 8L9.5 6"/><path d="M12.5 8L15.5 6"/>
+                        </svg>
+                    </div>
                     <h3>Live Crop Pricing</h3>
                     <p>Access real-time market prices for rice, cocoa, cassava, and more across all major regions in Sierra Leone.</p>
                     <div class="service-tags">
@@ -1158,7 +1175,14 @@
                     </div>
                 </div>
                 <div class="service-card">
-                    <div class="service-icon service-icon-blue"><i data-lucide="phone"></i></div>
+                    <div class="service-icon service-icon-blue">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="6" cy="12" r="3"/>
+                            <circle cx="18" cy="12" r="3"/>
+                            <path d="M9 12H15"/>
+                            <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+                        </svg>
+                    </div>
                     <h3>Direct Farmer Contact</h3>
                     <p>Connect directly with farmers and buyers - no middlemen, no hidden fees. Build trusted business relationships.</p>
                     <div class="service-tags">
@@ -1168,7 +1192,14 @@
                     </div>
                 </div>
                 <div class="service-card">
-                    <div class="service-icon service-icon-earth"><i data-lucide="map-pinned"></i></div>
+                    <div class="service-icon service-icon-earth">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 8L9 5L15 6L20 9L19 16L13 19L6 18L4 8Z"/>
+                            <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+                            <circle cx="8" cy="15" r="1" fill="currentColor" stroke="none" opacity="0.5"/>
+                            <circle cx="16" cy="9" r="1" fill="currentColor" stroke="none" opacity="0.5"/>
+                        </svg>
+                    </div>
                     <h3>Regional Market Data</h3>
                     <p>Explore market trends, supply levels, and pricing history across Bo, Kenema, Makeni, Western Area and other parts of Sierra Leone.</p>
                     <div class="service-tags">
@@ -1179,7 +1210,12 @@
                     </div>
                 </div>
                 <div class="service-card">
-                    <div class="service-icon service-icon-green"><i data-lucide="shield-half"></i></div>
+                    <div class="service-icon service-icon-green">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3L19 6V12C19 17 15.5 20 12 21C8.5 20 5 17 5 12V6L12 3Z"/>
+                            <path d="M8.5 12L11 14.5L15.5 9.5"/>
+                        </svg>
+                    </div>
                     <h3>Secure Transactions</h3>
                     <p>Verified listings and trusted seller badges ensure that every transaction is safe and transparent.</p>
                     <div class="service-tags">
@@ -1189,7 +1225,13 @@
                     </div>
                 </div>
                 <div class="service-card">
-                    <div class="service-icon service-icon-blue"><i data-lucide="bell"></i></div>
+                    <div class="service-icon service-icon-blue">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 5C9 5 7.5 7 7.5 10C7.5 14 6 15.5 6 15.5H18C18 15.5 16.5 14 16.5 10C16.5 7 15 5 12 5Z"/>
+                            <path d="M10 17.5C10 18.6 10.9 19.5 12 19.5C13.1 19.5 14 18.6 14 17.5"/>
+                            <circle cx="17.5" cy="5.5" r="2" fill="currentColor" stroke="none"/>
+                        </svg>
+                    </div>
                     <h3>Price Alerts</h3>
                     <p>Set price thresholds and get notified when your target crops hit the right price in your preferred region.</p>
                     <div class="service-tags">
@@ -1198,7 +1240,13 @@
                     </div>
                 </div>
                 <div class="service-card">
-                    <div class="service-icon service-icon-earth"><i data-lucide="chart-line"></i></div>
+                    <div class="service-icon service-icon-earth">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 20H20" opacity="0.35"/>
+                            <path d="M4 16L9 12L13 15L19 7"/>
+                            <path d="M19 7C20 6 20.8 6 21.3 4.3"/>
+                        </svg>
+                    </div>
                     <h3>Market Insights</h3>
                     <p>Weekly reports on crop performance, seasonal trends, and demand forecasts to help you plan ahead.</p>
                     <div class="service-tags">
@@ -1788,7 +1836,7 @@
                         <label class="kyc-provider-card" data-provider="orange">
                             <input type="radio" name="kycProvider" value="orange" hidden>
                             <div class="kyc-provider-icon kyc-provider-orange">
-                                <img src="images/orange_money_sl.jpg" alt="Orange Money" onerror="this.parentElement.classList.add('kyc-provider-icon--fallback'); this.replaceWith(Object.assign(document.createElement('span'), {className: 'kyc-provider-icon-fallback', textContent: 'OM'}))">
+                                <img src="assets/icons/orange-money.png" alt="Orange Money" onerror="this.parentElement.classList.add('kyc-provider-icon--fallback'); this.replaceWith(Object.assign(document.createElement('span'), {className: 'kyc-provider-icon-fallback', textContent: 'OM'}))">
                             </div>
                             <div class="kyc-provider-name">Orange Money</div>
                             <div class="kyc-provider-desc">Orange SL</div>
