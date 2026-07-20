@@ -3280,6 +3280,807 @@ document.getElementById('deleteAccountConfirmBtn')?.addEventListener('click', as
 });
 
 
+// ===================================================================
+// ADMIN CONTENT MANAGEMENT
+// ===================================================================
+// Lets the admin (ADMIN_UID) edit, add, or delete almost every piece of
+// site copy — hero, about, stats, services, how-it-works, testimonials,
+// CTA, section headers, blog posts, and crop listings — from a UI instead
+// of editing this file directly. Content lives in Firestore under the
+// 'site_content' collection (one doc per section); blog posts and crops
+// already had their own collections and are managed from here too.
+//
+// REQUIRED FIRESTORE RULES — add alongside your existing crops/KYC rules:
+//   match /site_content/{docId} {
+//     allow read: if true;
+//     allow write: if request.auth != null && request.auth.uid == ADMIN_UID_VALUE;
+//   }
+//   match /posts/{postId} {
+//     allow read: if true;
+//     allow write: if request.auth != null && request.auth.uid == ADMIN_UID_VALUE;
+//   }
+// (Replace ADMIN_UID_VALUE with the same UID string as the ADMIN_UID
+// constant at the top of this file — Firestore rules can't import JS.)
+// crops/{cropId} write-by-admin rules should already exist alongside your
+// approve/reject logic; if not, mirror the same pattern there.
+// ===================================================================
+
+const DEFAULT_SITE_CONTENT = {
+    hero: {
+        title: "Connecting Sierra Leone's Farmers to the World",
+        subtitle: "Sign in to access real-time crop prices, contact local farmers, and view agricultural data.",
+        subtitle_signed_in: "You're signed in — browse what AgriMarket SL offers below, or use the Marketplace button above to return to your dashboard."
+    },
+    about: {
+        label: "About AgriMarket SL",
+        title: "Empowering Farmers with Real-Time Market Access",
+        body1: "AgriMarket SL bridges the gap between Sierra Leone's hardworking farmers and buyers across the country. We provide live crop pricing, direct farmer contacts, and regional market data; all in one platform built for the agricultural community.",
+        body2: "Founded with a mission to eliminate middlemen and bring transparency, we ensure that every farmer gets a fair deal and every buyer finds quality produce at the right price.",
+        badge_title: "Since 2026",
+        badge_subtitle: "Serving Sierra Leone"
+    },
+    stats: {
+        items: [
+            { id: 's1', value: '10', label: 'Farmers Listed' },
+            { id: 's2', value: '50', label: 'Crop Varieties' },
+            { id: 's3', value: '3', label: 'Regions Covered' },
+            { id: 's4', value: '20', label: 'Monthly Listings' }
+        ]
+    },
+    services: {
+        label: "Our Services",
+        title: "Everything You Need for a Better Market",
+        subtitle: "Tools and services designed specifically for Sierra Leone's agricultural ecosystem.",
+        items: [
+            { id: 'sv1', icon: 'rice', color: 'green', title: 'Live Crop Pricing', desc: "Access real-time market prices for rice, cocoa, cassava, and more across all major regions in Sierra Leone.", tags: ['Real-time', 'Regional', 'Verified', 'Secure Purchase'] },
+            { id: 'sv2', icon: 'link', color: 'blue', title: 'Direct Farmer Contact', desc: "Connect directly with farmers and buyers - no middlemen, no hidden fees. Build trusted business relationships.", tags: ['No middlemen', 'Verified contacts', 'Secure purchase'] },
+            { id: 'sv3', icon: 'map', color: 'earth', title: 'Regional Market Data', desc: "Explore market trends, supply levels, and pricing history across Bo, Kenema, Makeni, Western Area and other parts of Sierra Leone.", tags: ['4 regions', 'All districts', 'Trends', 'Analytics'] },
+            { id: 'sv4', icon: 'shield', color: 'green', title: 'Secure Transactions', desc: "Verified listings and trusted seller badges ensure that every transaction is safe and transparent.", tags: ['Verified', 'Trusted', 'Secure Purchase'] },
+            { id: 'sv5', icon: 'bell', color: 'blue', title: 'Price Alerts', desc: "Set price thresholds and get notified when your target crops hit the right price in your preferred region.", tags: ['Notifications', 'Custom'] },
+            { id: 'sv6', icon: 'trend', color: 'earth', title: 'Market Insights', desc: "Weekly reports on crop performance, seasonal trends, and demand forecasts to help you plan ahead.", tags: ['Reports', 'Weekly', 'Forecasts'] }
+        ]
+    },
+    how_it_works: {
+        label: "How It Works",
+        title: "Simple Steps to Get Started",
+        subtitle: "From sign-up to your first market deal — it only takes a few minutes.",
+        steps: [
+            { id: 'st1', title: 'Create Account', desc: "Sign up with your email and password. It's free and takes less than a minute." },
+            { id: 'st2', title: 'Browse Listings', desc: "Search crops by name, filter by region, and compare real-time prices at a glance." },
+            { id: 'st3', title: 'Connect Directly', desc: "Get verified phone numbers and contact details of farmers and traders instantly." },
+            { id: 'st4', title: 'Trade Smart', desc: "Close deals with confidence using transparent pricing and trusted seller information." },
+            { id: 'st5', title: 'Chat Smart', desc: "Close deals with confidence using transparent pricing and trusted seller information and our secure end-to-end chat platform with verified users." }
+        ]
+    },
+    testimonials: {
+        label: "Testimonials",
+        title: "Trusted by Farmers & Buyers",
+        subtitle: "Hear from the people who use AgriMarket SL every day.",
+        items: [
+            { id: 't1', name: 'Mohamed Sesay', role: 'Rice Farmer · Makeni', quote: "AgriMarket SL helped me find buyers for my rice harvest without any middlemen. I got a much better price this season!", avatar_url: 'images/mohamed_sesay_rice_farmer.jpeg', stars: 5 },
+            { id: 't2', name: 'Catherine Caulker', role: 'Market Trader · Freetown', quote: "I can check live prices before heading to the market. It saves me time and ensures I never overpay for produce.", avatar_url: 'images/fatmata_kamara_market_trader.jpeg', stars: 5 },
+            { id: 't3', name: 'Abdul Rahman', role: 'Export Buyer · Kenema/Bo/Makeni/Freetown', quote: "The regional filter is a game changer. I track cocoa prices across Kenema and Bo and know exactly where to buy.", avatar_url: 'images/abdul_rahman_export_buyer.jpeg', stars: 4.5 }
+        ]
+    },
+    cta: {
+        title: "Ready to Access Live Market Prices?",
+        subtitle: "Join hundreds of farmers and buyers already trading smarter on AgriMarket SL.",
+        button_text: "Get Started Free"
+    },
+    crops_header: {
+        label: "Popular Crops",
+        title: "What's on the Market",
+        subtitle: "Explore the most traded crops across Sierra Leone's agricultural regions."
+    },
+    blog_header: {
+        label: "From the Blog",
+        title: "Market Insights & Farming Tips",
+        subtitle: "News, pricing trends, and practical advice for Sierra Leone's farmers and buyers."
+    },
+    newsletter: {
+        title: "Stay Ahead of the Market",
+        subtitle: "Get weekly crop price updates and farming tips straight to your inbox."
+    },
+    footer: {
+        tagline: "Empowering Sierra Leone's farmers with real-time market access, transparent pricing, and direct buyer connections.",
+        email: "support@agrimarketsl.com",
+        phone: "+23276786944",
+        address: "Kenema, Eastern Region, Sierra Leone",
+        hours: "Mon – Sat: 8AM – 6PM GMT",
+        copyright_name: "AgriMarket SL"
+    }
+};
+
+// Only these six keys can ever be stored for a service card's icon — the
+// admin picks from this fixed set rather than entering raw SVG/HTML, so
+// there's no way saved content can inject markup onto the public page.
+const SERVICE_ICON_SVGS = {
+    rice: '<path d="M12 21C12 21 11 11 13 4"/><path d="M12 17L8 15"/><path d="M12 17L16 15"/><path d="M12 14L8 12"/><path d="M12 14L16 12"/><path d="M12 11L8 9"/><path d="M12 11L16 9"/><path d="M12.5 8L9.5 6"/><path d="M12.5 8L15.5 6"/>',
+    link: '<circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><path d="M9 12H15"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+    map: '<path d="M4 8L9 5L15 6L20 9L19 16L13 19L6 18L4 8Z"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="8" cy="15" r="1" fill="currentColor" stroke="none" opacity="0.5"/><circle cx="16" cy="9" r="1" fill="currentColor" stroke="none" opacity="0.5"/>',
+    shield: '<path d="M12 3L19 6V12C19 17 15.5 20 12 21C8.5 20 5 17 5 12V6L12 3Z"/><path d="M8.5 12L11 14.5L15.5 9.5"/>',
+    bell: '<path d="M12 5C9 5 7.5 7 7.5 10C7.5 14 6 15.5 6 15.5H18C18 15.5 16.5 14 16.5 10C16.5 7 15 5 12 5Z"/><path d="M10 17.5C10 18.6 10.9 19.5 12 19.5C13.1 19.5 14 18.6 14 17.5"/><circle cx="17.5" cy="5.5" r="2" fill="currentColor" stroke="none"/>',
+    trend: '<path d="M4 20H20" opacity="0.35"/><path d="M4 16L9 12L13 15L19 7"/><path d="M19 7C20 6 20.8 6 21.3 4.3"/>'
+};
+const SERVICE_ICON_LABELS = { rice: 'Rice panicle (crop/pricing)', link: 'Direct link (contact)', map: 'Region map (data)', shield: 'Shield check (security)', bell: 'Bell (alerts)', trend: 'Growth trend (insights)' };
+
+function serviceIconSvg(key) {
+    const inner = SERVICE_ICON_SVGS[key] || SERVICE_ICON_SVGS.rice;
+    return `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+}
+
+function starsHtml(stars) {
+    const n = Number(stars) || 0;
+    const full = Math.floor(n);
+    const half = (n - full) >= 0.5;
+    let html = '';
+    for (let i = 0; i < full; i++) html += '<i data-lucide="star"></i>';
+    if (half) html += '<i data-lucide="star-half"></i>';
+    return html;
+}
+
+// Populated by loadSiteContent() from Firestore; falls back to
+// DEFAULT_SITE_CONTENT for any doc/field that hasn't been edited yet, so
+// the site never shows blank content just because the admin hasn't
+// touched a given section.
+let siteContentCache = {};
+
+function getSiteContent(key) {
+    return { ...DEFAULT_SITE_CONTENT[key], ...(siteContentCache[key] || {}) };
+}
+
+async function loadSiteContent() {
+    const db = window.firebaseDb;
+    const { collection, getDocs } = window.dbFns;
+    try {
+        const snap = await getDocs(collection(db, 'site_content'));
+        const fetched = {};
+        snap.docs.forEach((d) => { fetched[d.id] = d.data(); });
+        siteContentCache = fetched;
+    } catch (err) {
+        console.error('Failed to load site content, using defaults', err);
+        siteContentCache = {};
+    }
+    renderAllSiteContent();
+}
+window.loadSiteContent = loadSiteContent;
+
+function renderAllSiteContent() {
+    renderHeroContent();
+    renderAboutContent();
+    renderServicesContent();
+    renderHowItWorksContent();
+    renderTestimonialsContent();
+    renderCtaContent();
+    renderCropsHeaderContent();
+    renderBlogHeaderContent();
+    renderNewsletterContent();
+    renderFooterContent();
+    if (window.lucide) lucide.createIcons();
+    window.initStatsCounters?.();
+}
+
+function renderHeroContent() {
+    const d = getSiteContent('hero');
+    window.HERO_CONTENT = d;
+    const titleEl = document.getElementById('heroTitle');
+    if (titleEl) titleEl.textContent = d.title;
+    window.syncHeroTextForAuthState?.();
+}
+
+function renderAboutContent() {
+    const d = getSiteContent('about');
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('aboutLabel', d.label);
+    set('aboutTitle', d.title);
+    set('aboutBody1', d.body1);
+    set('aboutBody2', d.body2);
+    set('aboutBadgeTitle', d.badge_title);
+    set('aboutBadgeSubtitle', d.badge_subtitle);
+
+    const stats = getSiteContent('stats').items || [];
+    const statsRow = document.getElementById('statsRow');
+    if (statsRow && stats.length) {
+        statsRow.innerHTML = stats.map((s) => `
+            <div class="stat-card">
+                <div class="stat-number" data-count="${parseInt(s.value) || 0}">0</div>
+                <div class="stat-label">${escapeHtml(s.label)}</div>
+            </div>
+        `).join('');
+    }
+}
+
+function renderServicesContent() {
+    const d = getSiteContent('services');
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('servicesLabel', d.label);
+    set('servicesTitle', d.title);
+    set('servicesSubtitle', d.subtitle);
+
+    const grid = document.getElementById('servicesGrid');
+    if (grid && Array.isArray(d.items) && d.items.length) {
+        grid.innerHTML = d.items.map((item) => `
+            <div class="service-card">
+                <div class="service-icon service-icon-${escapeHtml(item.color || 'green')}">${serviceIconSvg(item.icon)}</div>
+                <h3>${escapeHtml(item.title)}</h3>
+                <p>${escapeHtml(item.desc)}</p>
+                <div class="service-tags">
+                    ${(item.tags || []).map((t) => `<span class="service-tag">${escapeHtml(t)}</span>`).join('')}
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+function renderHowItWorksContent() {
+    const d = getSiteContent('how_it_works');
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('howItWorksLabel', d.label);
+    set('howItWorksTitle', d.title);
+    set('howItWorksSubtitle', d.subtitle);
+
+    const grid = document.getElementById('stepsGrid');
+    if (grid && Array.isArray(d.steps) && d.steps.length) {
+        grid.innerHTML = d.steps.map((step, i) => `
+            <div class="step-card">
+                <div class="step-number">${i + 1}</div>
+                <h3>${escapeHtml(step.title)}</h3>
+                <p>${escapeHtml(step.desc)}</p>
+            </div>
+        `).join('');
+    }
+}
+
+function renderTestimonialsContent() {
+    const d = getSiteContent('testimonials');
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('testimonialsLabel', d.label);
+    set('testimonialsTitle', d.title);
+    set('testimonialsSubtitle', d.subtitle);
+
+    const grid = document.getElementById('testimonialsGrid');
+    if (grid && Array.isArray(d.items) && d.items.length) {
+        grid.innerHTML = d.items.map((t) => `
+            <div class="testimonial-card">
+                <div class="testimonial-stars">${starsHtml(t.stars)}</div>
+                <blockquote>"${escapeHtml(t.quote)}"</blockquote>
+                <div class="testimonial-author">
+                    <img src="${escapeHtml(t.avatar_url || FALLBACK_IMAGE)}" alt="${escapeHtml(t.name)}" class="testimonial-avatar" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}'">
+                    <div>
+                        <div class="testimonial-name">${escapeHtml(t.name)}</div>
+                        <div class="testimonial-role">${escapeHtml(t.role)}</div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+function renderCtaContent() {
+    const d = getSiteContent('cta');
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('ctaTitle', d.title);
+    set('ctaSubtitle', d.subtitle);
+    set('ctaButtonText', d.button_text);
+}
+
+function renderCropsHeaderContent() {
+    const d = getSiteContent('crops_header');
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('cropsLabel', d.label);
+    set('cropsTitle', d.title);
+    set('cropsSubtitle', d.subtitle);
+}
+
+function renderBlogHeaderContent() {
+    const d = getSiteContent('blog_header');
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('blogLabel', d.label);
+    set('blogTitle', d.title);
+    set('blogSubtitle', d.subtitle);
+}
+
+function renderNewsletterContent() {
+    const d = getSiteContent('newsletter');
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('newsletterTitle', d.title);
+    set('newsletterSubtitle', d.subtitle);
+}
+
+function renderFooterContent() {
+    const d = getSiteContent('footer');
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('footerTagline', d.tagline);
+    set('footerAddress', d.address);
+    set('footerHours', d.hours);
+    set('footerCopyrightName', d.copyright_name);
+    const emailEl = document.getElementById('footerEmail');
+    if (emailEl) { emailEl.textContent = d.email; emailEl.href = `mailto:${d.email}`; }
+    const phoneEl = document.getElementById('footerPhone');
+    if (phoneEl) { phoneEl.textContent = d.phone; phoneEl.href = `tel:${(d.phone || '').replace(/[^+\d]/g, '')}`; }
+}
+
+// ---- Generic form helpers used by every admin editor below ----
+function adminFormFieldsHtml(schema, values) {
+    return schema.map((f) => {
+        const val = values[f.key] ?? '';
+        if (f.type === 'textarea') {
+            return `<div class="form-group"><label>${escapeHtml(f.label)}</label><textarea data-field="${f.key}" rows="3">${escapeHtml(val)}</textarea></div>`;
+        }
+        if (f.type === 'select') {
+            const opts = f.options.map((o) => `<option value="${escapeHtml(o.value)}" ${values[f.key] === o.value ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('');
+            return `<div class="form-group"><label>${escapeHtml(f.label)}</label><select data-field="${f.key}">${opts}</select></div>`;
+        }
+        return `<div class="form-group"><label>${escapeHtml(f.label)}</label><input type="${f.type === 'number' ? 'number' : 'text'}" data-field="${f.key}" value="${escapeHtml(val)}"></div>`;
+    }).join('');
+}
+function adminReadFormFields(schema, container) {
+    const out = {};
+    schema.forEach((f) => {
+        const el = container.querySelector(`[data-field="${f.key}"]`);
+        if (!el) return;
+        if (f.type === 'number') out[f.key] = Number(el.value || 0);
+        else if (f.key === 'tags') out[f.key] = el.value.split(',').map((t) => t.trim()).filter(Boolean);
+        else out[f.key] = el.value.trim();
+    });
+    return out;
+}
+
+const SERVICE_ITEM_SCHEMA = [
+    { key: 'title', label: 'Title', type: 'text' },
+    { key: 'desc', label: 'Description', type: 'textarea' },
+    { key: 'icon', label: 'Icon', type: 'select', options: Object.keys(SERVICE_ICON_LABELS).map((k) => ({ value: k, label: SERVICE_ICON_LABELS[k] })) },
+    { key: 'color', label: 'Color', type: 'select', options: [{ value: 'green', label: 'Green' }, { value: 'blue', label: 'Blue' }, { value: 'earth', label: 'Earth' }] },
+    { key: 'tags', label: 'Tags (comma separated)', type: 'text' }
+];
+const STAT_ITEM_SCHEMA = [
+    { key: 'value', label: 'Number (e.g. 10)', type: 'text' },
+    { key: 'label', label: 'Label', type: 'text' }
+];
+const STEP_ITEM_SCHEMA = [
+    { key: 'title', label: 'Title', type: 'text' },
+    { key: 'desc', label: 'Description', type: 'textarea' }
+];
+const TESTIMONIAL_ITEM_SCHEMA = [
+    { key: 'name', label: 'Name', type: 'text' },
+    { key: 'role', label: 'Role / Location', type: 'text' },
+    { key: 'quote', label: 'Quote', type: 'textarea' },
+    { key: 'avatar_url', label: 'Photo URL', type: 'text' },
+    { key: 'stars', label: 'Stars (0-5)', type: 'number' }
+];
+const SIMPLE_TEXT_SECTIONS = {
+    hero: { label: 'Hero banner', fields: [{ key: 'title', label: 'Headline', type: 'text' }, { key: 'subtitle', label: 'Subtext (signed out)', type: 'textarea' }, { key: 'subtitle_signed_in', label: 'Subtext (signed in)', type: 'textarea' }], render: renderHeroContent },
+    about: { label: 'About section', fields: [{ key: 'label', label: 'Eyebrow label', type: 'text' }, { key: 'title', label: 'Heading', type: 'text' }, { key: 'body1', label: 'Body paragraph 1', type: 'textarea' }, { key: 'body2', label: 'Body paragraph 2', type: 'textarea' }, { key: 'badge_title', label: 'Photo badge title', type: 'text' }, { key: 'badge_subtitle', label: 'Photo badge subtitle', type: 'text' }], render: renderAboutContent },
+    cta: { label: 'CTA banner', fields: [{ key: 'title', label: 'Heading', type: 'text' }, { key: 'subtitle', label: 'Subtext', type: 'textarea' }, { key: 'button_text', label: 'Button text', type: 'text' }], render: renderCtaContent },
+    crops_header: { label: 'Crops section header', fields: [{ key: 'label', label: 'Eyebrow label', type: 'text' }, { key: 'title', label: 'Heading', type: 'text' }, { key: 'subtitle', label: 'Subtext', type: 'textarea' }], render: renderCropsHeaderContent },
+    blog_header: { label: 'Blog section header', fields: [{ key: 'label', label: 'Eyebrow label', type: 'text' }, { key: 'title', label: 'Heading', type: 'text' }, { key: 'subtitle', label: 'Subtext', type: 'textarea' }], render: renderBlogHeaderContent },
+    newsletter: { label: 'Newsletter box', fields: [{ key: 'title', label: 'Heading', type: 'text' }, { key: 'subtitle', label: 'Subtext', type: 'textarea' }], render: renderNewsletterContent },
+    footer: { label: 'Footer', fields: [{ key: 'tagline', label: 'Brand tagline', type: 'textarea' }, { key: 'email', label: 'Contact email', type: 'text' }, { key: 'phone', label: 'Contact phone', type: 'text' }, { key: 'address', label: 'Address', type: 'text' }, { key: 'hours', label: 'Business hours', type: 'text' }, { key: 'copyright_name', label: 'Copyright name', type: 'text' }], render: renderFooterContent }
+};
+const LIST_SECTIONS = {
+    stats: { label: 'Stats row', arrayKey: 'items', itemLabel: 'stat', schema: STAT_ITEM_SCHEMA, render: renderAboutContent, summary: (i) => `${i.value} — ${i.label}` },
+    services: { label: 'Services grid', arrayKey: 'items', itemLabel: 'service', schema: SERVICE_ITEM_SCHEMA, render: renderServicesContent, summary: (i) => i.title },
+    how_it_works: { label: 'How it works steps', arrayKey: 'steps', itemLabel: 'step', schema: STEP_ITEM_SCHEMA, render: renderHowItWorksContent, summary: (i) => i.title },
+    testimonials: { label: 'Testimonials', arrayKey: 'items', itemLabel: 'testimonial', schema: TESTIMONIAL_ITEM_SCHEMA, render: renderTestimonialsContent, summary: (i) => `${i.name} — ${(i.quote || '').slice(0, 40)}…` }
+};
+
+async function saveSiteContentDoc(key, data) {
+    const db = window.firebaseDb;
+    const { doc, setDoc } = window.dbFns;
+    await setDoc(doc(db, 'site_content', key), data, { merge: true });
+    siteContentCache[key] = { ...siteContentCache[key], ...data };
+}
+
+function adminGenId() { return 'i' + Math.random().toString(36).slice(2, 10); }
+
+// ---- Admin dashboard shell ----
+const ADMIN_SECTIONS = [
+    { group: 'Site content', key: 'hero', label: 'Hero banner' },
+    { group: 'Site content', key: 'about', label: 'About & Stats' },
+    { group: 'Site content', key: 'services', label: 'Services grid' },
+    { group: 'Site content', key: 'how_it_works', label: 'How it works' },
+    { group: 'Site content', key: 'testimonials', label: 'Testimonials' },
+    { group: 'Site content', key: 'cta', label: 'CTA banner' },
+    { group: 'Site content', key: 'crops_header', label: 'Crops header' },
+    { group: 'Site content', key: 'blog_header', label: 'Blog header' },
+    { group: 'Site content', key: 'newsletter', label: 'Newsletter box' },
+    { group: 'Site content', key: 'footer', label: 'Footer' },
+    { group: 'Marketplace', key: 'blog_posts', label: 'Blog posts' },
+    { group: 'Marketplace', key: 'crops_manage', label: 'Manage crops' },
+    { group: 'Marketplace', key: 'kyc', label: 'KYC requests' }
+];
+
+function showAdminDashboardView() {
+    document.getElementById('landingPage').style.display = 'none';
+    document.getElementById('landingSections').style.display = 'none';
+    document.getElementById('landingNav').style.display = 'none';
+    document.getElementById('dashboardApp').style.display = 'none';
+    document.getElementById('profileView')?.style && (document.getElementById('profileView').style.display = 'none');
+    const view = document.getElementById('adminDashboardApp');
+    view.style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    renderAdminSidebar();
+    openAdminSection('hero');
+}
+window.showAdminDashboardView = showAdminDashboardView;
+
+function hideAdminDashboardView() {
+    document.getElementById('adminDashboardApp').style.display = 'none';
+    window.showDashboardView?.();
+}
+window.hideAdminDashboardView = hideAdminDashboardView;
+
+function renderAdminSidebar() {
+    const nav = document.getElementById('adminSidebarNav');
+    if (!nav) return;
+    let currentGroup = '';
+    let html = '';
+    ADMIN_SECTIONS.forEach((s) => {
+        if (s.group !== currentGroup) {
+            currentGroup = s.group;
+            html += `<div class="admin-sidebar-group">${escapeHtml(currentGroup)}</div>`;
+        }
+        html += `<button type="button" class="admin-sidebar-item" data-section="${s.key}">${escapeHtml(s.label)}</button>`;
+    });
+    nav.innerHTML = html;
+    nav.querySelectorAll('.admin-sidebar-item').forEach((btn) => {
+        btn.addEventListener('click', () => openAdminSection(btn.getAttribute('data-section')));
+    });
+}
+
+function setActiveAdminSidebarItem(key) {
+    document.querySelectorAll('.admin-sidebar-item').forEach((btn) => {
+        btn.classList.toggle('active', btn.getAttribute('data-section') === key);
+    });
+}
+
+function openAdminSection(key) {
+    setActiveAdminSidebarItem(key);
+    const panel = document.getElementById('adminPanelContent');
+    if (!panel) return;
+
+    if (SIMPLE_TEXT_SECTIONS[key]) return renderSimpleTextEditor(key, panel);
+    if (LIST_SECTIONS[key]) return renderListEditor(key, panel);
+    if (key === 'blog_posts') return renderBlogPostsEditor(panel);
+    if (key === 'crops_manage') return renderCropsManageEditor(panel);
+    if (key === 'kyc') {
+        panel.innerHTML = `
+            <h3>KYC verification requests</h3>
+            <p class="text-muted" style="margin-bottom:1rem;">Review farmer/buyer identity verification submissions in the existing KYC panel.</p>
+            <button type="button" class="btn-blue" id="adminOpenKycBtn">Open KYC review</button>
+        `;
+        document.getElementById('adminOpenKycBtn').addEventListener('click', () => openAdminKycModal());
+    }
+}
+
+function renderSimpleTextEditor(key, panel) {
+    const section = SIMPLE_TEXT_SECTIONS[key];
+    const values = getSiteContent(key);
+    panel.innerHTML = `
+        <h3>${escapeHtml(section.label)}</h3>
+        <form id="adminSimpleForm">
+            ${adminFormFieldsHtml(section.fields, values)}
+            <button type="submit" class="btn-blue">Save changes</button>
+        </form>
+    `;
+    document.getElementById('adminSimpleForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = adminReadFormFields(section.fields, e.target);
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+            await saveSiteContentDoc(key, data);
+            section.render();
+            if (window.lucide) lucide.createIcons();
+            triggerToast('Saved. The live page has been updated.');
+        } catch (err) {
+            console.error('Failed to save site content', err);
+            triggerToast(mapFirebaseError(err));
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save changes';
+        }
+    });
+}
+
+function renderListEditor(key, panel) {
+    const section = LIST_SECTIONS[key];
+    const data = getSiteContent(key);
+    const items = data[section.arrayKey] || [];
+
+    panel.innerHTML = `
+        <div class="admin-section-header">
+            <h3>${escapeHtml(section.label)}</h3>
+            <button type="button" class="btn-blue" id="adminAddItemBtn"><i data-lucide="plus"></i> Add ${escapeHtml(section.itemLabel)}</button>
+        </div>
+        <div id="adminListItems" class="admin-item-list"></div>
+    `;
+    if (window.lucide) lucide.createIcons();
+
+    const listEl = document.getElementById('adminListItems');
+    function renderRows() {
+        if (!items.length) {
+            listEl.innerHTML = `<p class="text-muted">No ${escapeHtml(section.itemLabel)}s yet.</p>`;
+            return;
+        }
+        listEl.innerHTML = items.map((item, i) => `
+            <div class="admin-item-row">
+                <span>${escapeHtml(section.summary(item))}</span>
+                <div class="admin-item-row-actions">
+                    <button type="button" class="btn-outline" data-edit="${i}">Edit</button>
+                    <button type="button" class="btn-delete" data-delete="${i}">Delete</button>
+                </div>
+            </div>
+        `).join('');
+        listEl.querySelectorAll('[data-edit]').forEach((btn) => {
+            btn.addEventListener('click', () => openAdminItemModal(section, items, Number(btn.getAttribute('data-edit')), key));
+        });
+        listEl.querySelectorAll('[data-delete]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                if (!window.confirm(`Delete this ${section.itemLabel}?`)) return;
+                items.splice(Number(btn.getAttribute('data-delete')), 1);
+                await saveSiteContentDoc(key, { [section.arrayKey]: items });
+                section.render();
+                if (window.lucide) lucide.createIcons();
+                triggerToast('Deleted.');
+                renderRows();
+            });
+        });
+    }
+    renderRows();
+
+    document.getElementById('adminAddItemBtn').addEventListener('click', () => {
+        openAdminItemModal(section, items, -1, key);
+    });
+}
+
+// Shared modal for adding/editing a single item within any list section
+// (stats, services, how-it-works steps, testimonials).
+function openAdminItemModal(section, items, index, key) {
+    const isNew = index === -1;
+    const values = isNew ? {} : items[index];
+    const modal = document.getElementById('adminItemModal');
+    const body = document.getElementById('adminItemModalBody');
+    body.innerHTML = `
+        <h3>${isNew ? 'Add' : 'Edit'} ${escapeHtml(section.itemLabel)}</h3>
+        <form id="adminItemForm">
+            ${adminFormFieldsHtml(section.schema, values.tags ? { ...values, tags: values.tags.join(', ') } : values)}
+            <div style="display:flex; gap:0.75rem; margin-top:0.5rem;">
+                <button type="submit" class="btn-blue">Save</button>
+                <button type="button" class="btn-outline" id="adminItemCancelBtn">Cancel</button>
+            </div>
+        </form>
+    `;
+    modal.classList.add('active');
+    document.getElementById('adminItemCancelBtn').addEventListener('click', () => modal.classList.remove('active'));
+    document.getElementById('adminItemForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newValues = adminReadFormFields(section.schema, e.target);
+        if (isNew) {
+            items.push({ id: adminGenId(), ...newValues });
+        } else {
+            items[index] = { ...values, ...newValues };
+        }
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+            await saveSiteContentDoc(key, { [section.arrayKey]: items });
+            section.render();
+            if (window.lucide) lucide.createIcons();
+            triggerToast('Saved. The live page has been updated.');
+            modal.classList.remove('active');
+            openAdminSection(key);
+        } catch (err) {
+            console.error('Failed to save item', err);
+            triggerToast(mapFirebaseError(err));
+            btn.disabled = false;
+            btn.textContent = 'Save';
+        }
+    });
+}
+
+// ---- Blog posts manager (separate 'posts' collection, one doc per post) ----
+const BLOG_POST_SCHEMA = [
+    { key: 'title', label: 'Title', type: 'text' },
+    { key: 'author', label: 'Author', type: 'text' },
+    { key: 'category', label: 'Category tag', type: 'text' },
+    { key: 'image_url', label: 'Image URL', type: 'text' },
+    { key: 'excerpt', label: 'Excerpt (shown on card)', type: 'textarea' },
+    { key: 'content', label: 'Full post content', type: 'textarea' }
+];
+
+async function renderBlogPostsEditor(panel) {
+    panel.innerHTML = `
+        <div class="admin-section-header">
+            <h3>Blog posts</h3>
+            <button type="button" class="btn-blue" id="adminAddPostBtn"><i data-lucide="plus"></i> New post</button>
+        </div>
+        <div id="adminPostsList" class="admin-item-list"><p class="text-muted">Loading…</p></div>
+    `;
+    if (window.lucide) lucide.createIcons();
+    document.getElementById('adminAddPostBtn').addEventListener('click', () => openAdminPostModal(null));
+
+    const db = window.firebaseDb;
+    const { collection, getDocs, query, orderBy } = window.dbFns;
+    const listEl = document.getElementById('adminPostsList');
+    try {
+        const snap = await getDocs(query(collection(db, 'posts'), orderBy('published_at', 'desc')));
+        const posts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (!posts.length) {
+            listEl.innerHTML = '<p class="text-muted">No blog posts yet.</p>';
+            return;
+        }
+        listEl.innerHTML = posts.map((p) => `
+            <div class="admin-item-row">
+                <span>${escapeHtml(p.title || 'Untitled post')}</span>
+                <div class="admin-item-row-actions">
+                    <button type="button" class="btn-outline" data-edit-post="${p.id}">Edit</button>
+                    <button type="button" class="btn-delete" data-delete-post="${p.id}">Delete</button>
+                </div>
+            </div>
+        `).join('');
+        listEl.querySelectorAll('[data-edit-post]').forEach((btn) => {
+            const post = posts.find((p) => p.id === btn.getAttribute('data-edit-post'));
+            btn.addEventListener('click', () => openAdminPostModal(post));
+        });
+        listEl.querySelectorAll('[data-delete-post]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                if (!window.confirm('Delete this blog post permanently?')) return;
+                try {
+                    const { doc, deleteDoc } = window.dbFns;
+                    await deleteDoc(doc(db, 'posts', btn.getAttribute('data-delete-post')));
+                    triggerToast('Post deleted.');
+                    renderBlogPostsEditor(panel);
+                    loadBlogPosts();
+                } catch (err) {
+                    console.error('Failed to delete post', err);
+                    triggerToast(mapFirebaseError(err));
+                }
+            });
+        });
+    } catch (err) {
+        console.error('Failed to load posts for admin', err);
+        listEl.innerHTML = '<p class="text-muted">Could not load blog posts.</p>';
+    }
+}
+
+function openAdminPostModal(post) {
+    const isNew = !post;
+    const modal = document.getElementById('adminItemModal');
+    const body = document.getElementById('adminItemModalBody');
+    body.innerHTML = `
+        <h3>${isNew ? 'New' : 'Edit'} blog post</h3>
+        <form id="adminPostForm">
+            ${adminFormFieldsHtml(BLOG_POST_SCHEMA, post || {})}
+            <div style="display:flex; gap:0.75rem; margin-top:0.5rem;">
+                <button type="submit" class="btn-blue">${isNew ? 'Publish' : 'Save'}</button>
+                <button type="button" class="btn-outline" id="adminPostCancelBtn">Cancel</button>
+            </div>
+        </form>
+    `;
+    modal.classList.add('active');
+    document.getElementById('adminPostCancelBtn').addEventListener('click', () => modal.classList.remove('active'));
+    document.getElementById('adminPostForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = adminReadFormFields(BLOG_POST_SCHEMA, e.target);
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+            const db = window.firebaseDb;
+            const { doc, setDoc, collection } = window.dbFns;
+            const ref = isNew ? doc(collection(db, 'posts')) : doc(db, 'posts', post.id);
+            await setDoc(ref, {
+                ...data,
+                published_at: isNew ? new Date().toISOString() : (post.published_at || new Date().toISOString())
+            }, { merge: true });
+            triggerToast(isNew ? 'Post published.' : 'Post updated.');
+            modal.classList.remove('active');
+            openAdminSection('blog_posts');
+            loadBlogPosts();
+        } catch (err) {
+            console.error('Failed to save post', err);
+            triggerToast(mapFirebaseError(err));
+            btn.disabled = false;
+            btn.textContent = isNew ? 'Publish' : 'Save';
+        }
+    });
+}
+
+// ---- Crops manager (edit/delete ANY listing, any status — approve/reject
+// of pending ones already exists in the Pending Approvals section) ----
+const CROP_EDIT_SCHEMA = [
+    { key: 'name', label: 'Name', type: 'text' },
+    { key: 'category', label: 'Category', type: 'text' },
+    { key: 'location', label: 'Region', type: 'text' },
+    { key: 'price', label: 'Price (SLLE)', type: 'number' },
+    { key: 'image_url', label: 'Image URL', type: 'text' },
+    { key: 'status', label: 'Status', type: 'select', options: [{ value: 'approved', label: 'Approved (live)' }, { value: 'pending', label: 'Pending' }, { value: 'rejected', label: 'Rejected' }] }
+];
+
+async function renderCropsManageEditor(panel) {
+    panel.innerHTML = `
+        <div class="admin-section-header">
+            <h3>Manage crops</h3>
+            <span class="text-muted">Edit or delete any listing, regardless of status.</span>
+        </div>
+        <div id="adminCropsList" class="admin-item-list"><p class="text-muted">Loading…</p></div>
+    `;
+    const db = window.firebaseDb;
+    const { collection, getDocs, query, orderBy } = window.dbFns;
+    const listEl = document.getElementById('adminCropsList');
+    try {
+        const snap = await getDocs(query(collection(db, 'crops'), orderBy('created_at', 'desc')));
+        const crops = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (!crops.length) {
+            listEl.innerHTML = '<p class="text-muted">No listings yet.</p>';
+            return;
+        }
+        listEl.innerHTML = crops.map((c) => `
+            <div class="admin-item-row">
+                <span>${escapeHtml(c.name || 'Unnamed')} <span class="text-muted">(${escapeHtml(c.status || 'unknown')})</span></span>
+                <div class="admin-item-row-actions">
+                    <button type="button" class="btn-outline" data-edit-crop="${c.id}">Edit</button>
+                    <button type="button" class="btn-delete" data-delete-crop="${c.id}">Delete</button>
+                </div>
+            </div>
+        `).join('');
+        listEl.querySelectorAll('[data-edit-crop]').forEach((btn) => {
+            const crop = crops.find((c) => c.id === btn.getAttribute('data-edit-crop'));
+            btn.addEventListener('click', () => openAdminCropModal(crop));
+        });
+        listEl.querySelectorAll('[data-delete-crop]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                await handleDeleteListing(btn.getAttribute('data-delete-crop'), { refreshLive: true });
+                renderCropsManageEditor(panel);
+            });
+        });
+    } catch (err) {
+        console.error('Failed to load crops for admin', err);
+        listEl.innerHTML = '<p class="text-muted">Could not load listings.</p>';
+    }
+}
+
+function openAdminCropModal(crop) {
+    const modal = document.getElementById('adminItemModal');
+    const body = document.getElementById('adminItemModalBody');
+    body.innerHTML = `
+        <h3>Edit listing</h3>
+        <form id="adminCropForm">
+            ${adminFormFieldsHtml(CROP_EDIT_SCHEMA, crop)}
+            <div style="display:flex; gap:0.75rem; margin-top:0.5rem;">
+                <button type="submit" class="btn-blue">Save</button>
+                <button type="button" class="btn-outline" id="adminCropCancelBtn">Cancel</button>
+            </div>
+        </form>
+    `;
+    modal.classList.add('active');
+    document.getElementById('adminCropCancelBtn').addEventListener('click', () => modal.classList.remove('active'));
+    document.getElementById('adminCropForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = adminReadFormFields(CROP_EDIT_SCHEMA, e.target);
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+            const db = window.firebaseDb;
+            const { doc, setDoc } = window.dbFns;
+            await setDoc(doc(db, 'crops', crop.id), { ...data, name_lower: data.name.toLowerCase() }, { merge: true });
+            triggerToast('Listing updated.');
+            modal.classList.remove('active');
+            openAdminSection('crops_manage');
+            await loadInitialCrops();
+        } catch (err) {
+            console.error('Failed to save crop', err);
+            triggerToast(mapFirebaseError(err));
+            btn.disabled = false;
+            btn.textContent = 'Save';
+        }
+    });
+}
+
 async function initApp() {
     try {
         await waitForFirebase();
@@ -3354,6 +4155,9 @@ async function initApp() {
             <button id="navKycAdminBtn" class="btn-kyc-admin" type="button" title="KYC Verification Requests">
                 <i data-lucide="shield-check"></i> KYC
                 <span id="adminKycBadge" class="btn-kyc-admin-badge" hidden>0</span>
+            </button>
+            <button id="navAdminBtn" class="btn-outline" type="button" title="Admin Dashboard">
+                <i data-lucide="settings"></i> Admin
             </button>` : ''}
             <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i data-lucide="store"></i> Marketplace</button>
             <button id="navProfileBtn" class="nav-profile-pill" type="button" title="Your profile">
@@ -3378,6 +4182,7 @@ async function initApp() {
             window.updateAdminKycBadge?.();
             if (window.lucide) lucide.createIcons();
         }
+        document.getElementById('navAdminBtn')?.addEventListener('click', () => showAdminDashboardView());
         document.getElementById('navLogoutBtn').addEventListener('click', async () => {
             try {
                 await signOut(auth);
@@ -3638,10 +4443,15 @@ async function initApp() {
     });
     chatMessageForm?.addEventListener('submit', handleSendChatMessage);
 
+    document.getElementById('adminBackBtn')?.addEventListener('click', () => hideAdminDashboardView());
+
     // Blog posts are public marketing content, so load them regardless of
     // sign-in state (unlike crop listings, which only load once a user is
     // authenticated).
     loadBlogPosts();
+    // Same applies to the rest of the landing page copy — hero, about,
+    // services, etc. — which is now admin-editable via Firestore.
+    loadSiteContent();
 
     // Newsletter signup — writes to a 'newsletter_subscribers' Firestore
     // collection, using the email itself as the document ID so re-submitting
