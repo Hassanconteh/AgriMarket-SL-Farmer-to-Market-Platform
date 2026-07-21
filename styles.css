@@ -667,6 +667,80 @@ button { font-family: 'Inter', sans-serif; cursor: pointer; }
 }
 .btn-contact:hover { background-color: var(--brand-blue); color: #fff; }
 
+.btn-add-cart {
+    width: 100%; padding: 0.65rem;
+    background-color: var(--background); color: var(--primary);
+    border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+    border-radius: var(--radius-md); font-weight: 600; font-size: 0.875rem;
+    cursor: pointer; transition: background-color 0.15s ease, color 0.15s ease;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+    margin-top: 0.5rem;
+}
+.btn-add-cart:hover { background-color: var(--primary); color: #fff; }
+
+/* ---- Cart modal ---- */
+.cart-modal-content { max-width: 480px; text-align: left; }
+.cart-farmer-group { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1rem; }
+.cart-farmer-group:last-child { margin-bottom: 0; }
+.cart-farmer-group-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; color: var(--foreground); margin-bottom: 0.85rem; }
+.cart-farmer-group-header i { width: 16px; height: 16px; color: var(--primary); }
+.cart-item-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+.cart-item-row:last-of-type { border-bottom: none; }
+.cart-item-row img { width: 44px; height: 44px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0; }
+.cart-item-info { flex: 1; min-width: 0; }
+.cart-item-name { font-size: 0.87rem; font-weight: 600; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cart-item-price { font-size: 0.78rem; color: var(--muted-foreground); }
+.cart-item-qty { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; }
+.cart-item-qty button { width: 24px; height: 24px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--background); color: var(--foreground); cursor: pointer; font-size: 0.95rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.cart-item-qty button:hover { background: var(--accent); }
+.cart-item-qty span { min-width: 1.2rem; text-align: center; font-size: 0.85rem; font-weight: 600; }
+.cart-item-remove { background: none; border: none; color: var(--muted-foreground); cursor: pointer; flex-shrink: 0; padding: 0.3rem; border-radius: var(--radius-sm); display: inline-flex; }
+.cart-item-remove:hover { color: var(--destructive); background: color-mix(in srgb, var(--destructive) 8%, transparent); }
+.cart-item-remove i { width: 15px; height: 15px; }
+.cart-farmer-group-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+.cart-farmer-group-footer button { padding: 0.5rem 1rem; font-size: 0.82rem; }
+
+/* ---- Checkout modal ---- */
+.checkout-items-summary { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 0.75rem; }
+.checkout-item-line { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--foreground); padding: 0.25rem 0; }
+.checkout-total-line { display: flex; justify-content: space-between; font-weight: 700; font-size: 1rem; color: var(--foreground); margin-bottom: 1.1rem; padding: 0 0.1rem; }
+.checkout-payment-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.85rem; border: 1.5px solid; border-radius: var(--radius-md); font-weight: 600; font-size: 0.85rem; }
+.checkout-payment-badge i { width: 16px; height: 16px; }
+
+/* ---- Orders view ---- */
+.orders-tabs { max-width: 500px; }
+.orders-tabs .tab-btn { display: inline-flex; align-items: center; gap: 0.4rem; }
+.orders-panel { margin-top: 1.5rem; }
+.orders-list { display: flex; flex-direction: column; gap: 1rem; max-width: 700px; }
+.order-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; }
+.order-card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.6rem; }
+.order-card-header > div:first-child { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.92rem; color: var(--foreground); }
+.order-card-header i { width: 16px; height: 16px; color: var(--muted-foreground); }
+.order-card-items { font-size: 0.85rem; color: var(--muted-foreground); margin-bottom: 0.85rem; }
+.order-card-note { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.82rem; color: var(--foreground); background: var(--accent); border-radius: var(--radius-sm); padding: 0.5rem 0.7rem; margin-bottom: 0.85rem; }
+.order-card-note i { width: 14px; height: 14px; flex-shrink: 0; margin-top: 0.15rem; }
+.order-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--foreground); }
+.order-card-actions { display: flex; gap: 0.5rem; }
+.order-card-footer button { padding: 0.45rem 0.9rem; font-size: 0.8rem; }
+
+.order-status-badge { display: inline-flex; align-items: center; padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.order-status-pending { background: #fef3c7; color: var(--agri-earth, #92400e); }
+.order-status-confirmed { background: #dbeafe; color: var(--brand-blue); }
+.order-status-ready { background: #ede9fe; color: #7c3aed; }
+.order-status-completed { background: #dcfce7; color: var(--primary); }
+.order-status-cancelled { background: #fee2e2; color: var(--destructive); }
+
+.order-progress-steps { display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem; }
+.order-progress-step { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; flex: 1; position: relative; }
+.order-progress-step:not(:last-child)::after { content: ''; position: absolute; top: 5px; left: calc(50% + 10px); width: calc(100% - 20px); height: 2px; background: var(--border); }
+.order-progress-step.done:not(:last-child)::after { background: var(--primary); }
+.order-progress-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--border); z-index: 1; }
+.order-progress-step.done .order-progress-dot { background: var(--primary); }
+.order-progress-label { font-size: 0.68rem; color: var(--muted-foreground); text-align: center; }
+.order-progress-step.done .order-progress-label { color: var(--foreground); font-weight: 600; }
+.order-progress-cancelled { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--destructive); margin-bottom: 0.25rem; }
+.order-progress-cancelled i { width: 15px; height: 15px; }
+
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: color-mix(in srgb, var(--foreground) 50%, transparent); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.2s ease, visibility 0.2s ease; padding: 1rem; }
 .modal-overlay.active { opacity: 1; visibility: visible; }
 .modal-content { background: var(--popover); width: 90%; max-width: 450px; max-height: 90vh; overflow-y: auto; border-radius: var(--radius-xl); border: 1px solid var(--border); padding: 1.75rem; position: relative; box-shadow: var(--shadow-xl); color: var(--popover-foreground); }
