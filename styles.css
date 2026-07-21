@@ -207,7 +207,7 @@ button { font-family: 'Inter', sans-serif; cursor: pointer; }
 .btn-full { width: 100%; margin-top: 1rem; padding: 0.7rem 1rem; }
 
 .hero {
-    background: linear-gradient(rgba(22, 163, 74, 0.85), rgba(120, 53, 15, 0.78)), url('assets/hero-illustration.svg') center/cover;
+    background: linear-gradient(rgba(22, 163, 74, 0.85), rgba(120, 53, 15, 0.78)), url('images/hero-illustration.svg') center/cover;
     color: white;
     text-align: center;
     display: flex;
