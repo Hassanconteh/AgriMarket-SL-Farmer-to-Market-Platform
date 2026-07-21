@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fdf3e0"/>
+      <stop offset="55%" stop-color="#f6dcae"/>
+      <stop offset="100%" stop-color="#f3c98a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- sky -->
+  <rect x="0" y="0" width="1600" height="900" fill="url(#skyGrad)"/>
+
+  <!-- sun -->
+  <circle cx="1180" cy="250" r="150" fill="#f3a53f" opacity="0.16"/>
+  <circle cx="1180" cy="250" r="85" fill="#f3a53f"/>
+
+  <!-- birds -->
+  <path d="M280,150 C295,138 305,138 320,150 C335,138 345,138 360,150" stroke="#7a5230" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.5"/>
+  <path d="M420,110 C432,100 440,100 452,110 C464,100 472,100 484,110" stroke="#7a5230" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.4"/>
+  <path d="M760,90 C772,80 780,80 792,90 C804,80 812,80 824,90" stroke="#7a5230" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.4"/>
+
+  <!-- far hills -->
+  <path d="M0,520 C200,468 400,502 600,480 C850,453 1000,500 1250,468 C1400,452 1500,480 1600,458 L1600,900 L0,900 Z" fill="#94c17e"/>
+
+  <!-- mid hills -->
+  <path d="M0,610 C180,572 380,604 620,584 C860,560 1050,600 1300,580 C1420,570 1520,596 1600,582 L1600,900 L0,900 Z" fill="#5f9e50"/>
+
+  <!-- palms (back, small, on far hill) -->
+  <g opacity="0.85">
+    <path d="M1080,470 C1078,455 1080,440 1084,428" stroke="#6b4a26" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M1084,428 C1070,420 1058,422 1048,432" stroke="#3f7d34" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M1084,428 C1094,416 1106,414 1118,420" stroke="#3f7d34" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M1084,428 C1080,414 1082,402 1090,392" stroke="#3f7d34" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- rice paddy terraces (foreground) -->
+  <path d="M0,660 C260,644 520,668 800,652 C1080,636 1340,662 1600,648 L1600,720 C1340,734 1080,708 800,724 C520,740 260,716 0,732 Z" fill="#4f8f3f"/>
+  <path d="M0,700 C260,686 520,708 800,694 C1080,680 1340,704 1600,690 L1600,760 C1340,774 1080,750 800,764 C520,778 260,756 0,770 Z" fill="#457f37"/>
+  <path d="M0,742 C260,728 520,750 800,736 C1080,722 1340,746 1600,732 L1600,802 C1340,816 1080,792 800,806 C520,820 260,798 0,812 Z" fill="#3c722f"/>
+  <path d="M0,784 C260,770 520,792 800,778 C1080,764 1340,788 1600,774 L1600,900 L0,900 Z" fill="#336327"/>
+
+  <!-- paddy dike lines -->
+  <path d="M0,660 C260,644 520,668 800,652 C1080,636 1340,662 1600,648" stroke="#92400e" stroke-width="2.5" fill="none" opacity="0.35"/>
+  <path d="M0,700 C260,686 520,708 800,694 C1080,680 1340,704 1600,690" stroke="#92400e" stroke-width="2.5" fill="none" opacity="0.3"/>
+  <path d="M0,742 C260,728 520,750 800,736 C1080,722 1340,746 1600,732" stroke="#92400e" stroke-width="2.5" fill="none" opacity="0.28"/>
+  <path d="M0,784 C260,770 520,792 800,778 C1080,764 1340,788 1600,774" stroke="#92400e" stroke-width="2.5" fill="none" opacity="0.25"/>
+
+  <!-- foreground palms -->
+  <g>
+    <path d="M170,760 C166,720 172,684 184,656" stroke="#5a3d20" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M184,656 C158,640 132,644 108,664" stroke="#2f6b26" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M184,656 C204,634 230,630 256,640" stroke="#2f6b26" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M184,656 C178,626 184,600 200,578" stroke="#2f6b26" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M184,656 C168,632 168,610 180,588" stroke="#2f6b26" stroke-width="7" fill="none" stroke-linecap="round"/>
+  </g>
+  <g>
+    <path d="M1440,800 C1435,752 1442,708 1456,676" stroke="#5a3d20" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <path d="M1456,676 C1426,658 1396,662 1368,684" stroke="#2f6b26" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <path d="M1456,676 C1480,652 1510,648 1538,660" stroke="#2f6b26" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <path d="M1456,676 C1450,642 1456,612 1474,588" stroke="#2f6b26" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <path d="M1456,676 C1438,650 1436,624 1450,600" stroke="#2f6b26" stroke-width="8" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- brand sprouts scattered in the paddies -->
+  <g stroke="#a7e6a0" stroke-width="3.4" fill="none" stroke-linecap="round" opacity="0.9">
+    <path d="M420,850 L420,822"/>
+    <path d="M420,824 C410,824 404,814 406,802"/>
+    <path d="M420,824 C430,824 436,814 434,802"/>
+  </g>
+  <g stroke="#a7e6a0" stroke-width="3.2" fill="none" stroke-linecap="round" opacity="0.85">
+    <path d="M980,878 L980,852"/>
+    <path d="M980,854 C971,854 966,845 968,834"/>
+    <path d="M980,854 C989,854 994,845 992,834"/>
+  </g>
+  <g stroke="#a7e6a0" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8">
+    <path d="M1250,832 L1250,808"/>
+    <path d="M1250,810 C1242,810 1238,802 1240,792"/>
+    <path d="M1250,810 C1258,810 1262,802 1260,792"/>
+  </g>
+</svg>
