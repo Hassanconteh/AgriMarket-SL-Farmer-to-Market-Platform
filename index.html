@@ -1630,6 +1630,29 @@
         </div>
     </div>
 
+    <div id="ordersView" style="display:none;">
+        <div class="dashboard-header float-in" style="animation-delay: 0.1s;">
+            <div class="container profile-page-topbar">
+                <button type="button" id="ordersBackBtn" class="btn-outline"><i data-lucide="arrow-left"></i> Back to Marketplace</button>
+                <h2 class="profile-page-title">My Orders</h2>
+            </div>
+        </div>
+
+        <main class="container float-in profile-page" style="animation-delay: 0.3s;">
+            <div id="ordersTabsContainer" class="auth-tabs orders-tabs">
+                <button class="tab-btn active" id="ordersTabPurchases">Purchases</button>
+                <button class="tab-btn" id="ordersTabSales">Sales <span id="ordersSalesActionBadge" class="notif-badge" hidden>0</span></button>
+            </div>
+
+            <div id="ordersPurchasesPanel" class="orders-panel">
+                <div id="ordersPurchasesList" class="orders-list"><p class="text-muted">Loading…</p></div>
+            </div>
+            <div id="ordersSalesPanel" class="orders-panel" hidden>
+                <div id="ordersSalesList" class="orders-list"><p class="text-muted">Loading…</p></div>
+            </div>
+        </main>
+    </div>
+
     <div id="profileView" style="display:none;">
         <div class="dashboard-header float-in" style="animation-delay: 0.1s;">
             <div class="container profile-page-topbar">
@@ -2017,6 +2040,21 @@
             <button class="close-btn" id="closeAdminKycDetailModal" aria-label="Close"><i data-lucide="x"></i></button>
             <h3 class="kyc-modal-title"><i data-lucide="file-search"></i> KYC Application Review</h3>
             <div id="adminKycDetailContent"></div>
+        </div>
+    </div>
+
+    <div id="cartModal" class="modal-overlay">
+        <div class="modal-content float-in cart-modal-content">
+            <button class="close-btn" id="closeCartModal" aria-label="Close"><i data-lucide="x"></i></button>
+            <h3 class="kyc-modal-title"><i data-lucide="shopping-cart"></i> Your Cart</h3>
+            <div id="cartModalBody"><p class="text-muted">Loading…</p></div>
+        </div>
+    </div>
+
+    <div id="checkoutModal" class="modal-overlay">
+        <div class="modal-content float-in" style="max-width: 480px; text-align: left;">
+            <button class="close-btn" id="closeCheckoutModal" aria-label="Close"><i data-lucide="x"></i></button>
+            <div id="checkoutModalBody"></div>
         </div>
     </div>
 
