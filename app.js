@@ -336,6 +336,7 @@ function renderListings(listings, append = false) {
                 <span class="card-price">SLLE ${Number(item.price || 0).toLocaleString()}</span>
                 <button type="button" class="btn-contact" data-crop-id="${cropId}"><i data-lucide="phone"></i> Contact Farmer</button>
                 ${showMessageSeller ? `<button type="button" class="btn-message-seller" data-action="message-seller" data-id="${cropId}"><i data-lucide="message-circle"></i> Message Seller</button>` : ''}
+                ${showMessageSeller ? `<button type="button" class="btn-add-cart" data-action="add-cart" data-id="${cropId}"><i data-lucide="shopping-cart"></i> Add to Cart</button>` : ''}
                 ${isAdminViewing ? `
                 <div class="admin-card-actions">
                     <button type="button" class="btn-manage" data-action="return-to-pending" data-id="${cropId}">Return to Pending</button>
@@ -351,6 +352,18 @@ function renderListings(listings, append = false) {
                     type: 'listing',
                     cropId: item.id,
                     cropName: item.name || 'Listing'
+                });
+            });
+            card.querySelector('[data-action="add-cart"]')?.addEventListener('click', () => {
+                addToCart({
+                    crop_id: item.id,
+                    name: item.name || 'Unnamed listing',
+                    price: Number(item.price || 0),
+                    image_url: item.image_url || FALLBACK_IMAGE,
+                    category: item.category || '',
+                    location: item.location || '',
+                    farmer_uid: item.submitted_by,
+                    farmer_name: item.farmer_display_name || 'Farmer'
                 });
             });
         }
@@ -4081,6 +4094,452 @@ function openAdminCropModal(crop) {
     });
 }
 
+// ===== Cart & Orders (pre-orders / purchase tracking) =====
+// Cart is one doc per user: carts/{uid} = { items: [...], updated_at }.
+// Placing an order groups the cart items belonging to ONE farmer into a
+// new orders/{orderId} doc — fulfillment happens per-farmer, so a cart
+// spanning multiple farmers becomes multiple separate orders, each placed
+// individually from its own "Place Pre-Order" button in the cart modal.
+//
+// There's no live payment gateway. "payment_provider" just records which
+// of the buyer's verified KYC mobile money providers (Orange/Africell/
+// Qcell) they intend to pay with — checkout requires kyc_status ===
+// 'approved' so this is a real verified value, not free text.
+let cartCache = { items: [] };
+
+function cartDocRef() {
+    const db = window.firebaseDb;
+    const { doc } = window.dbFns;
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    if (!uid) return null;
+    return doc(db, 'carts', uid);
+}
+
+async function loadCart() {
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    if (!uid) { cartCache = { items: [] }; updateCartBadge(); return; }
+    const { getDoc } = window.dbFns;
+    try {
+        const snap = await getDoc(cartDocRef());
+        cartCache = snap.exists() ? snap.data() : { items: [] };
+    } catch (err) {
+        console.error('Failed to load cart', err);
+        cartCache = { items: [] };
+    }
+    if (!Array.isArray(cartCache.items)) cartCache.items = [];
+    updateCartBadge();
+}
+window.loadCart = loadCart;
+
+async function saveCart() {
+    const ref = cartDocRef();
+    if (!ref) return;
+    const { setDoc } = window.dbFns;
+    await setDoc(ref, { items: cartCache.items, updated_at: new Date().toISOString() });
+    updateCartBadge();
+}
+
+function updateCartBadge() {
+    const badge = document.getElementById('cartBadge');
+    if (!badge) return;
+    const count = cartCache.items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.hidden = count === 0;
+}
+
+async function addToCart(cropItem) {
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    if (!uid) { triggerToast('Please sign in to add items to your cart.'); return; }
+    if (!cropItem.crop_id) return;
+    const existing = cartCache.items.find((i) => i.crop_id === cropItem.crop_id);
+    if (existing) {
+        existing.quantity = (existing.quantity || 1) + 1;
+    } else {
+        cartCache.items.push({ ...cropItem, quantity: 1, added_at: new Date().toISOString() });
+    }
+    try {
+        await saveCart();
+        triggerToast(`Added ${cropItem.name} to your cart.`);
+    } catch (err) {
+        console.error('Failed to add to cart', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
+async function updateCartItemQty(cropId, delta) {
+    const item = cartCache.items.find((i) => i.crop_id === cropId);
+    if (!item) return;
+    item.quantity = Math.max(1, (item.quantity || 1) + delta);
+    try {
+        await saveCart();
+        renderCartModal();
+    } catch (err) {
+        console.error('Failed to update cart', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
+async function removeCartItem(cropId) {
+    cartCache.items = cartCache.items.filter((i) => i.crop_id !== cropId);
+    try {
+        await saveCart();
+        renderCartModal();
+    } catch (err) {
+        console.error('Failed to update cart', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
+function cartGroupedByFarmer() {
+    const groups = {};
+    cartCache.items.forEach((item) => {
+        const key = item.farmer_uid || 'unknown';
+        if (!groups[key]) groups[key] = { farmer_uid: item.farmer_uid, farmer_name: item.farmer_name || 'Farmer', items: [] };
+        groups[key].items.push(item);
+    });
+    return Object.values(groups);
+}
+
+function openCartModal() {
+    document.getElementById('cartModal').classList.add('active');
+    renderCartModal();
+}
+window.openCartModal = openCartModal;
+
+document.getElementById('closeCartModal')?.addEventListener('click', () => document.getElementById('cartModal').classList.remove('active'));
+document.getElementById('cartModal')?.addEventListener('click', (e) => { if (e.target.id === 'cartModal') document.getElementById('cartModal').classList.remove('active'); });
+document.getElementById('closeCheckoutModal')?.addEventListener('click', () => document.getElementById('checkoutModal').classList.remove('active'));
+document.getElementById('checkoutModal')?.addEventListener('click', (e) => { if (e.target.id === 'checkoutModal') document.getElementById('checkoutModal').classList.remove('active'); });
+
+function renderCartModal() {
+    const body = document.getElementById('cartModalBody');
+    if (!body) return;
+    if (!cartCache.items.length) {
+        body.innerHTML = '<p class="text-muted">Your cart is empty. Browse listings and add crops you want to pre-order.</p>';
+        return;
+    }
+    const groups = cartGroupedByFarmer();
+    body.innerHTML = groups.map((g) => {
+        const subtotal = g.items.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 1), 0);
+        return `
+            <div class="cart-farmer-group">
+                <div class="cart-farmer-group-header"><i data-lucide="store"></i> ${escapeHtml(g.farmer_name)}</div>
+                ${g.items.map((item) => `
+                    <div class="cart-item-row">
+                        <img src="${escapeHtml(item.image_url || FALLBACK_IMAGE)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}'">
+                        <div class="cart-item-info">
+                            <div class="cart-item-name">${escapeHtml(item.name)}</div>
+                            <div class="cart-item-price">SLLE ${(item.price || 0).toLocaleString()} each</div>
+                        </div>
+                        <div class="cart-item-qty">
+                            <button type="button" data-qty-minus="${escapeHtml(item.crop_id)}" aria-label="Decrease quantity">−</button>
+                            <span>${item.quantity || 1}</span>
+                            <button type="button" data-qty-plus="${escapeHtml(item.crop_id)}" aria-label="Increase quantity">+</button>
+                        </div>
+                        <button type="button" class="cart-item-remove" data-remove="${escapeHtml(item.crop_id)}" aria-label="Remove item"><i data-lucide="trash-2"></i></button>
+                    </div>
+                `).join('')}
+                <div class="cart-farmer-group-footer">
+                    <span>Subtotal: <strong>SLLE ${subtotal.toLocaleString()}</strong></span>
+                    <button type="button" class="btn-blue" data-checkout="${escapeHtml(g.farmer_uid)}">Place Pre-Order</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    body.querySelectorAll('[data-qty-minus]').forEach((btn) => btn.addEventListener('click', () => updateCartItemQty(btn.getAttribute('data-qty-minus'), -1)));
+    body.querySelectorAll('[data-qty-plus]').forEach((btn) => btn.addEventListener('click', () => updateCartItemQty(btn.getAttribute('data-qty-plus'), 1)));
+    body.querySelectorAll('[data-remove]').forEach((btn) => btn.addEventListener('click', () => removeCartItem(btn.getAttribute('data-remove'))));
+    body.querySelectorAll('[data-checkout]').forEach((btn) => btn.addEventListener('click', () => openCheckoutModal(btn.getAttribute('data-checkout'))));
+    if (window.lucide) lucide.createIcons();
+}
+
+// ---- Checkout: creates one order per farmer from that farmer's cart items ----
+async function openCheckoutModal(farmerUid) {
+    const group = cartGroupedByFarmer().find((g) => g.farmer_uid === farmerUid);
+    if (!group) return;
+
+    const modal = document.getElementById('checkoutModal');
+    const body = document.getElementById('checkoutModalBody');
+    body.innerHTML = '<p class="text-muted">Loading…</p>';
+    modal.classList.add('active');
+
+    const uid = window.firebaseAuth.currentUser.uid;
+    const db = window.firebaseDb;
+    const { getDoc, doc } = window.dbFns;
+    let kycStatus = 'not_started', kycProvider = null;
+    try {
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (snap.exists()) {
+            kycStatus = snap.data().kyc_status || 'not_started';
+            kycProvider = snap.data().kyc_provider || null;
+        }
+    } catch (err) {
+        console.error('Failed to load KYC status for checkout', err);
+    }
+
+    const subtotal = group.items.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 1), 0);
+
+    if (kycStatus !== 'approved' || !kycProvider) {
+        body.innerHTML = `
+            <h3>Verify to place a pre-order</h3>
+            <p class="text-muted" style="margin-bottom:1rem;">Placing a pre-order requires a verified mobile money provider on file, so the farmer knows how you intend to pay. ${kycStatus === 'pending' ? 'Your KYC application is still under review — check back soon.' : "You haven't completed KYC verification yet."}</p>
+            <div style="display:flex; gap:0.75rem;">
+                ${kycStatus !== 'pending' ? `<button type="button" class="btn-blue" id="checkoutStartKycBtn">Start KYC verification</button>` : ''}
+                <button type="button" class="btn-outline" id="checkoutCancelBtn">Close</button>
+            </div>
+        `;
+        document.getElementById('checkoutCancelBtn').addEventListener('click', () => modal.classList.remove('active'));
+        document.getElementById('checkoutStartKycBtn')?.addEventListener('click', () => {
+            modal.classList.remove('active');
+            document.getElementById('cartModal').classList.remove('active');
+            openKycModal();
+        });
+        return;
+    }
+
+    const providerInfo = KYC_PROVIDERS[kycProvider] || { label: kycProvider, color: '#666' };
+
+    body.innerHTML = `
+        <h3>Confirm pre-order — ${escapeHtml(group.farmer_name)}</h3>
+        <div class="checkout-items-summary">
+            ${group.items.map((i) => `<div class="checkout-item-line"><span>${i.quantity || 1} × ${escapeHtml(i.name)}</span><span>SLLE ${((i.price || 0) * (i.quantity || 1)).toLocaleString()}</span></div>`).join('')}
+        </div>
+        <div class="checkout-total-line"><span>Total</span><span>SLLE ${subtotal.toLocaleString()}</span></div>
+        <div class="form-group">
+            <label>Payment method</label>
+            <div class="checkout-payment-badge" style="border-color:${providerInfo.color}; color:${providerInfo.color};"><i data-lucide="smartphone"></i> ${escapeHtml(providerInfo.label)} (verified)</div>
+        </div>
+        <div class="form-group">
+            <label>Note for the farmer (optional)</label>
+            <textarea id="checkoutNotes" rows="2" placeholder="e.g. preferred pickup date, delivery details..."></textarea>
+        </div>
+        <div style="display:flex; gap:0.75rem;">
+            <button type="button" class="btn-blue" id="checkoutConfirmBtn">Confirm Pre-Order</button>
+            <button type="button" class="btn-outline" id="checkoutCancelBtn">Cancel</button>
+        </div>
+    `;
+    if (window.lucide) lucide.createIcons();
+    document.getElementById('checkoutCancelBtn').addEventListener('click', () => modal.classList.remove('active'));
+    document.getElementById('checkoutConfirmBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('checkoutConfirmBtn');
+        btn.disabled = true;
+        btn.textContent = 'Placing order…';
+        try {
+            await placeOrder(group, subtotal, kycProvider, providerInfo.label, document.getElementById('checkoutNotes').value.trim());
+            modal.classList.remove('active');
+            document.getElementById('cartModal').classList.remove('active');
+            triggerToast('Pre-order placed! Track it under "My Orders".');
+        } catch (err) {
+            console.error('Failed to place order', err);
+            triggerToast(mapFirebaseError(err));
+            btn.disabled = false;
+            btn.textContent = 'Confirm Pre-Order';
+        }
+    });
+}
+
+async function placeOrder(group, subtotal, paymentProvider, paymentProviderLabel, notes) {
+    const db = window.firebaseDb;
+    const { doc, collection, setDoc } = window.dbFns;
+    const user = window.firebaseAuth.currentUser;
+    const now = new Date().toISOString();
+    const orderRef = doc(collection(db, 'orders'));
+    await setDoc(orderRef, {
+        buyer_uid: user.uid,
+        buyer_name: user.displayName || user.email || 'Buyer',
+        farmer_uid: group.farmer_uid,
+        farmer_name: group.farmer_name,
+        items: group.items.map((i) => ({ crop_id: i.crop_id, name: i.name, price: i.price, quantity: i.quantity || 1, image_url: i.image_url || '' })),
+        subtotal,
+        payment_provider: paymentProvider,
+        payment_provider_label: paymentProviderLabel,
+        notes: notes || '',
+        status: 'pending',
+        status_history: [{ status: 'pending', at: now }],
+        created_at: now,
+        updated_at: now
+    });
+
+    // Remove the just-ordered items from the cart and persist.
+    const orderedIds = new Set(group.items.map((i) => i.crop_id));
+    cartCache.items = cartCache.items.filter((i) => !orderedIds.has(i.crop_id));
+    await saveCart();
+    renderCartModal();
+}
+
+// ---- Orders view: buyer's Purchases tab + farmer's Sales tab ----
+const ORDER_STATUS_LABELS = { pending: 'Pending', confirmed: 'Confirmed', ready: 'Ready', completed: 'Completed', cancelled: 'Cancelled' };
+const ORDER_STATUS_STEPS = ['pending', 'confirmed', 'ready', 'completed'];
+
+function orderStatusBadgeHtml(status) {
+    return `<span class="order-status-badge order-status-${escapeHtml(status)}">${escapeHtml(ORDER_STATUS_LABELS[status] || status)}</span>`;
+}
+
+function orderProgressStepsHtml(status) {
+    if (status === 'cancelled') return `<div class="order-progress-cancelled"><i data-lucide="x-circle"></i> This order was cancelled</div>`;
+    const currentIndex = ORDER_STATUS_STEPS.indexOf(status);
+    return `<div class="order-progress-steps">
+        ${ORDER_STATUS_STEPS.map((s, i) => `
+            <div class="order-progress-step ${i <= currentIndex ? 'done' : ''}">
+                <span class="order-progress-dot"></span>
+                <span class="order-progress-label">${escapeHtml(ORDER_STATUS_LABELS[s])}</span>
+            </div>
+        `).join('')}
+    </div>`;
+}
+
+function orderItemsSummary(items) {
+    return (items || []).map((i) => `${i.quantity || 1} × ${escapeHtml(i.name)}`).join(', ');
+}
+
+function showOrdersView() {
+    document.getElementById('staticPageContainer').style.display = 'none';
+    document.getElementById('landingPage').style.display = 'none';
+    document.getElementById('landingSections').style.display = 'none';
+    document.getElementById('landingNav').style.display = 'none';
+    dashboardApp.style.display = 'none';
+    if (profileView) profileView.style.display = 'none';
+    document.getElementById('adminDashboardApp').style.display = 'none';
+    document.getElementById('ordersView').style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    loadMyPurchases();
+    loadMySales();
+}
+window.showOrdersView = showOrdersView;
+
+function hideOrdersView() {
+    document.getElementById('ordersView').style.display = 'none';
+    window.showDashboardView?.();
+}
+window.hideOrdersView = hideOrdersView;
+
+document.getElementById('ordersBackBtn')?.addEventListener('click', () => hideOrdersView());
+document.getElementById('ordersTabPurchases')?.addEventListener('click', () => {
+    document.getElementById('ordersTabPurchases').classList.add('active');
+    document.getElementById('ordersTabSales').classList.remove('active');
+    document.getElementById('ordersPurchasesPanel').hidden = false;
+    document.getElementById('ordersSalesPanel').hidden = true;
+});
+document.getElementById('ordersTabSales')?.addEventListener('click', () => {
+    document.getElementById('ordersTabSales').classList.add('active');
+    document.getElementById('ordersTabPurchases').classList.remove('active');
+    document.getElementById('ordersSalesPanel').hidden = false;
+    document.getElementById('ordersPurchasesPanel').hidden = true;
+});
+
+async function loadMyPurchases() {
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    const listEl = document.getElementById('ordersPurchasesList');
+    if (!uid || !listEl) return;
+    const db = window.firebaseDb;
+    const { collection, query, where, orderBy, getDocs } = window.dbFns;
+    listEl.innerHTML = '<p class="text-muted">Loading…</p>';
+    try {
+        const snap = await getDocs(query(collection(db, 'orders'), where('buyer_uid', '==', uid), orderBy('created_at', 'desc')));
+        const orders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (!orders.length) {
+            listEl.innerHTML = '<p class="text-muted">You haven\u2019t placed any pre-orders yet. Add listings to your cart to get started.</p>';
+            return;
+        }
+        listEl.innerHTML = orders.map((o) => `
+            <div class="order-card">
+                <div class="order-card-header">
+                    <div><i data-lucide="store"></i> ${escapeHtml(o.farmer_name || 'Farmer')}</div>
+                    ${orderStatusBadgeHtml(o.status)}
+                </div>
+                <div class="order-card-items">${orderItemsSummary(o.items)}</div>
+                ${orderProgressStepsHtml(o.status)}
+                <div class="order-card-footer">
+                    <span>Total: <strong>SLLE ${(o.subtotal || 0).toLocaleString()}</strong></span>
+                    <span class="text-muted">Paying via ${escapeHtml(o.payment_provider_label || '—')}</span>
+                    ${o.status === 'pending' ? `<button type="button" class="btn-delete" data-cancel-order="${o.id}">Cancel</button>` : ''}
+                </div>
+            </div>
+        `).join('');
+        listEl.querySelectorAll('[data-cancel-order]').forEach((btn) => {
+            btn.addEventListener('click', () => updateOrderStatus(btn.getAttribute('data-cancel-order'), 'cancelled', loadMyPurchases));
+        });
+        if (window.lucide) lucide.createIcons();
+    } catch (err) {
+        console.error('Failed to load purchases', err);
+        listEl.innerHTML = '<p class="text-muted">Could not load your orders right now.</p>';
+    }
+}
+
+async function loadMySales() {
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    const listEl = document.getElementById('ordersSalesList');
+    if (!uid || !listEl) return;
+    const db = window.firebaseDb;
+    const { collection, query, where, orderBy, getDocs } = window.dbFns;
+    listEl.innerHTML = '<p class="text-muted">Loading…</p>';
+    try {
+        const snap = await getDocs(query(collection(db, 'orders'), where('farmer_uid', '==', uid), orderBy('created_at', 'desc')));
+        const orders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        const actionable = orders.filter((o) => o.status === 'pending' || o.status === 'confirmed').length;
+        const salesBadge = document.getElementById('ordersSalesActionBadge');
+        if (salesBadge) { salesBadge.textContent = actionable; salesBadge.hidden = actionable === 0; }
+
+        if (!orders.length) {
+            listEl.innerHTML = '<p class="text-muted">No pre-orders on your listings yet.</p>';
+            return;
+        }
+        listEl.innerHTML = orders.map((o) => `
+            <div class="order-card">
+                <div class="order-card-header">
+                    <div><i data-lucide="user"></i> ${escapeHtml(o.buyer_name || 'Buyer')}</div>
+                    ${orderStatusBadgeHtml(o.status)}
+                </div>
+                <div class="order-card-items">${orderItemsSummary(o.items)}</div>
+                ${o.notes ? `<div class="order-card-note"><i data-lucide="message-square"></i> ${escapeHtml(o.notes)}</div>` : ''}
+                ${orderProgressStepsHtml(o.status)}
+                <div class="order-card-footer">
+                    <span>Total: <strong>SLLE ${(o.subtotal || 0).toLocaleString()}</strong></span>
+                    <span class="text-muted">Paying via ${escapeHtml(o.payment_provider_label || '—')}</span>
+                    <div class="order-card-actions">
+                        ${o.status === 'pending' ? `<button type="button" class="btn-blue" data-advance-order="${o.id}" data-next="confirmed">Confirm</button><button type="button" class="btn-delete" data-cancel-order="${o.id}">Decline</button>` : ''}
+                        ${o.status === 'confirmed' ? `<button type="button" class="btn-blue" data-advance-order="${o.id}" data-next="ready">Mark Ready</button>` : ''}
+                        ${o.status === 'ready' ? `<button type="button" class="btn-blue" data-advance-order="${o.id}" data-next="completed">Mark Completed</button>` : ''}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        listEl.querySelectorAll('[data-advance-order]').forEach((btn) => {
+            btn.addEventListener('click', () => updateOrderStatus(btn.getAttribute('data-advance-order'), btn.getAttribute('data-next'), loadMySales));
+        });
+        listEl.querySelectorAll('[data-cancel-order]').forEach((btn) => {
+            btn.addEventListener('click', () => updateOrderStatus(btn.getAttribute('data-cancel-order'), 'cancelled', loadMySales));
+        });
+        if (window.lucide) lucide.createIcons();
+    } catch (err) {
+        console.error('Failed to load sales', err);
+        listEl.innerHTML = '<p class="text-muted">Could not load incoming orders right now.</p>';
+    }
+}
+
+async function updateOrderStatus(orderId, newStatus, refreshFn) {
+    if (newStatus === 'cancelled' && !window.confirm('Cancel this order?')) return;
+    const db = window.firebaseDb;
+    const { doc, getDoc, setDoc } = window.dbFns;
+    try {
+        const ref = doc(db, 'orders', orderId);
+        const snap = await getDoc(ref);
+        const history = snap.exists() ? (snap.data().status_history || []) : [];
+        await setDoc(ref, {
+            status: newStatus,
+            updated_at: new Date().toISOString(),
+            status_history: [...history, { status: newStatus, at: new Date().toISOString() }]
+        }, { merge: true });
+        triggerToast(`Order marked as ${ORDER_STATUS_LABELS[newStatus] || newStatus}.`);
+        refreshFn?.();
+    } catch (err) {
+        console.error('Failed to update order status', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
 async function initApp() {
     try {
         await waitForFirebase();
@@ -4132,6 +4591,13 @@ async function initApp() {
         const isAdmin = user.uid === ADMIN_UID;
         navMenu.innerHTML = `
             ${!isAdmin ? '<button id="navSupportBtn" class="btn-outline" title="Contact Support"><i data-lucide="headset"></i> Support</button>' : ''}
+            ${!isAdmin ? `
+            <div class="notif-wrapper">
+                <button id="cartBtn" class="notif-bell-btn" type="button" aria-label="Cart">
+                    <i data-lucide="shopping-cart"></i>
+                    <span id="cartBadge" class="notif-badge" hidden>0</span>
+                </button>
+            </div>` : ''}
             <div class="notif-wrapper">
                 <button id="chatBellBtn" class="notif-bell-btn" type="button" aria-label="Messages">
                     <i data-lucide="message-circle"></i>
@@ -4159,6 +4625,7 @@ async function initApp() {
             <button id="navAdminBtn" class="btn-outline" type="button" title="Admin Dashboard">
                 <i data-lucide="settings"></i> Admin
             </button>` : ''}
+            ${!isAdmin ? '<button id="navOrdersBtn" class="btn-outline" type="button" title="My Orders"><i data-lucide="package"></i> Orders</button>' : ''}
             <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i data-lucide="store"></i> Marketplace</button>
             <button id="navProfileBtn" class="nav-profile-pill" type="button" title="Your profile">
                 ${avatarHtml(firstName || user.email || 'User', user.uid, photoUrl)}
@@ -4170,6 +4637,9 @@ async function initApp() {
         document.getElementById('navProfileBtn').addEventListener('click', () => showProfileView(user));
         setupNotificationBell();
         document.getElementById('chatBellBtn').addEventListener('click', () => openMessagesModal());
+        document.getElementById('cartBtn')?.addEventListener('click', () => openCartModal());
+        if (!isAdmin) updateCartBadge();
+        document.getElementById('navOrdersBtn')?.addEventListener('click', () => showOrdersView());
         document.getElementById('navSupportBtn')?.addEventListener('click', () => {
             openOrCreateChat({ otherUid: ADMIN_UID, otherLabel: 'Support', type: 'support' });
         });
@@ -4251,6 +4721,7 @@ async function initApp() {
             // Load initial crops and the notification bar for signed-in user
             await loadInitialCrops();
             loadNotifications();
+            if (!isAdmin) loadCart();
             await initE2EE(user.uid);
             subscribeToChats(user.uid);
             currentPresenceUid = user.uid;
@@ -4272,6 +4743,7 @@ async function initApp() {
             currentPresenceUid = null;
             currentNotifications = [];
             readNotificationIdsCache = new Set();
+            cartCache = { items: [] };
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
             document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
 
