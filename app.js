@@ -384,7 +384,49 @@ function renderListings(listings, append = false) {
             }
         }
         cropContainer.appendChild(card);
+        if (item.id && item.submitted_by !== currentUid) observeCropView(item.id, card);
     });
+}
+
+// ===== Listing view tracking =====
+// Counts an "impression" the first time a card actually scrolls into the
+// visitor's viewport (not just when it's rendered into the DOM — cards can
+// be created off-screen or re-rendered on filter changes without a human
+// ever seeing them). Deduped per browser session via viewedCropIds so
+// re-renders of the same listing (pagination, filters, tab switches)
+// don't inflate the count. Farmers viewing their own listing are excluded
+// in the caller above.
+const viewedCropIds = new Set();
+let cropViewObserver = null;
+function getCropViewObserver() {
+    if (cropViewObserver) return cropViewObserver;
+    cropViewObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            const cropId = entry.target.dataset.viewCropId;
+            cropViewObserver.unobserve(entry.target);
+            if (!cropId || viewedCropIds.has(cropId)) return;
+            viewedCropIds.add(cropId);
+            incrementCropView(cropId);
+        });
+    }, { threshold: 0.5 });
+    return cropViewObserver;
+}
+function observeCropView(cropId, cardEl) {
+    if (viewedCropIds.has(cropId)) return;
+    cardEl.dataset.viewCropId = cropId;
+    getCropViewObserver().observe(cardEl);
+}
+async function incrementCropView(cropId) {
+    const db = window.firebaseDb;
+    const { doc, updateDoc, increment } = window.dbFns;
+    try {
+        await updateDoc(doc(db, 'crops', cropId), { view_count: increment(1) });
+    } catch (err) {
+        // Non-critical — a missed view count shouldn't surface an error to
+        // the visitor browsing listings.
+        console.warn('Could not record listing view', err);
+    }
 }
 
 // ===== Email verification gate for contacting farmers =====
@@ -3700,7 +3742,8 @@ const ADMIN_SECTIONS = [
     { group: 'Site content', key: 'footer', label: 'Footer' },
     { group: 'Marketplace', key: 'blog_posts', label: 'Blog posts' },
     { group: 'Marketplace', key: 'crops_manage', label: 'Manage crops' },
-    { group: 'Marketplace', key: 'kyc', label: 'KYC requests' }
+    { group: 'Marketplace', key: 'kyc', label: 'KYC requests' },
+    { group: 'Insights', key: 'analytics', label: 'Analytics' }
 ];
 
 function showAdminDashboardView() {
@@ -3756,6 +3799,7 @@ function openAdminSection(key) {
     if (LIST_SECTIONS[key]) return renderListEditor(key, panel);
     if (key === 'blog_posts') return renderBlogPostsEditor(panel);
     if (key === 'crops_manage') return renderCropsManageEditor(panel);
+    if (key === 'analytics') return renderAdminAnalytics(panel);
     if (key === 'kyc') {
         panel.innerHTML = `
             <h3>KYC verification requests</h3>
@@ -4415,18 +4459,15 @@ function hideOrdersView() {
 window.hideOrdersView = hideOrdersView;
 
 document.getElementById('ordersBackBtn')?.addEventListener('click', () => hideOrdersView());
-document.getElementById('ordersTabPurchases')?.addEventListener('click', () => {
-    document.getElementById('ordersTabPurchases').classList.add('active');
-    document.getElementById('ordersTabSales').classList.remove('active');
-    document.getElementById('ordersPurchasesPanel').hidden = false;
-    document.getElementById('ordersSalesPanel').hidden = true;
-});
-document.getElementById('ordersTabSales')?.addEventListener('click', () => {
-    document.getElementById('ordersTabSales').classList.add('active');
-    document.getElementById('ordersTabPurchases').classList.remove('active');
-    document.getElementById('ordersSalesPanel').hidden = false;
-    document.getElementById('ordersPurchasesPanel').hidden = true;
-});
+function setActiveOrdersTab(tabId) {
+    ['ordersTabPurchases', 'ordersTabSales', 'ordersTabAnalytics'].forEach((id) => document.getElementById(id)?.classList.toggle('active', id === tabId));
+    document.getElementById('ordersPurchasesPanel').hidden = tabId !== 'ordersTabPurchases';
+    document.getElementById('ordersSalesPanel').hidden = tabId !== 'ordersTabSales';
+    document.getElementById('ordersAnalyticsPanel').hidden = tabId !== 'ordersTabAnalytics';
+}
+document.getElementById('ordersTabPurchases')?.addEventListener('click', () => setActiveOrdersTab('ordersTabPurchases'));
+document.getElementById('ordersTabSales')?.addEventListener('click', () => setActiveOrdersTab('ordersTabSales'));
+document.getElementById('ordersTabAnalytics')?.addEventListener('click', () => { setActiveOrdersTab('ordersTabAnalytics'); loadMyAnalytics(); });
 
 async function loadMyPurchases() {
     const uid = window.firebaseAuth?.currentUser?.uid;
@@ -4537,6 +4578,243 @@ async function updateOrderStatus(orderId, newStatus, refreshFn) {
     } catch (err) {
         console.error('Failed to update order status', err);
         triggerToast(mapFirebaseError(err));
+    }
+}
+
+// ===== Analytics (shared helpers + user-facing + admin) =====
+// All computed client-side from the crops/orders/users collections that
+// already exist — no separate analytics backend. Charts render with
+// Chart.js (loaded via CDN in index.html). Instances are tracked by
+// canvas id so re-rendering a panel (e.g. switching tabs back and forth)
+// destroys the old chart first instead of silently stacking canvases.
+const analyticsChartInstances = {};
+function destroyChartIfExists(canvasId) {
+    if (analyticsChartInstances[canvasId]) {
+        analyticsChartInstances[canvasId].destroy();
+        delete analyticsChartInstances[canvasId];
+    }
+}
+function renderLineChart(canvasId, labels, datasets) {
+    destroyChartIfExists(canvasId);
+    const ctx = document.getElementById(canvasId);
+    if (!ctx || !window.Chart) return;
+    analyticsChartInstances[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets: datasets.map((d) => ({ ...d, tension: 0.35, fill: false, borderWidth: 2, pointRadius: 3 })) },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }, scales: { y: { beginAtZero: true } } }
+    });
+}
+function renderDoughnutChart(canvasId, labels, data, colors) {
+    destroyChartIfExists(canvasId);
+    const ctx = document.getElementById(canvasId);
+    if (!ctx || !window.Chart) return;
+    analyticsChartInstances[canvasId] = new Chart(ctx, {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data, backgroundColor: colors }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+    });
+}
+function renderBarChart(canvasId, labels, data, color) {
+    destroyChartIfExists(canvasId);
+    const ctx = document.getElementById(canvasId);
+    if (!ctx || !window.Chart) return;
+    analyticsChartInstances[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+}
+function lastNMonthsLabels(n) {
+    const labels = [], keys = [];
+    const now = new Date();
+    for (let i = n - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        labels.push(d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }));
+        keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return { labels, keys };
+}
+function bucketByMonth(items, dateField, keys, valueFn) {
+    const buckets = Object.fromEntries(keys.map((k) => [k, 0]));
+    items.forEach((item) => {
+        const raw = item[dateField];
+        if (!raw) return;
+        const d = new Date(raw);
+        if (isNaN(d)) return;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (key in buckets) buckets[key] += valueFn(item);
+    });
+    return keys.map((k) => buckets[k]);
+}
+function analyticsKpiCardHtml(icon, label, value) {
+    return `<div class="analytics-kpi-card"><div class="analytics-kpi-icon"><i data-lucide="${icon}"></i></div><div class="analytics-kpi-value">${value}</div><div class="analytics-kpi-label">${escapeHtml(label)}</div></div>`;
+}
+const ORDER_STATUS_ALL = ['pending', 'confirmed', 'ready', 'completed', 'cancelled'];
+const ORDER_STATUS_CHART_COLORS = ['#92400e', '#2563eb', '#7c3aed', '#16a34a', '#dc2626'];
+const ORDER_STATUS_CHART_LABELS = ['Pending', 'Confirmed', 'Ready', 'Completed', 'Cancelled'];
+
+// ---- User-facing analytics: auto-detects farmer / buyer / both ----
+async function loadMyAnalytics() {
+    const uid = window.firebaseAuth?.currentUser?.uid;
+    const panel = document.getElementById('ordersAnalyticsPanel');
+    if (!uid || !panel) return;
+    panel.innerHTML = '<p class="text-muted">Loading…</p>';
+
+    const db = window.firebaseDb;
+    const { collection, query, where, getDocs } = window.dbFns;
+
+    try {
+        const [myCropsSnap, salesSnap, purchasesSnap] = await Promise.all([
+            getDocs(query(collection(db, 'crops'), where('submitted_by', '==', uid))),
+            getDocs(query(collection(db, 'orders'), where('farmer_uid', '==', uid))),
+            getDocs(query(collection(db, 'orders'), where('buyer_uid', '==', uid)))
+        ]);
+        const myCrops = myCropsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const sales = salesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const purchases = purchasesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        const isFarmer = myCrops.length > 0;
+        const isBuyer = purchases.length > 0;
+
+        if (!isFarmer && !isBuyer) {
+            panel.innerHTML = '<p class="text-muted">No activity yet — list a crop to sell, or add listings to your cart to start buying, and your analytics will show up here.</p>';
+            return;
+        }
+
+        let html = '';
+        if (isFarmer) {
+            html += `
+                <h3><i data-lucide="store"></i> As a Farmer</h3>
+                <div class="analytics-kpi-grid" id="farmerKpiGrid"></div>
+                <div class="analytics-charts-grid">
+                    <div class="analytics-chart-card"><h4>Revenue (last 6 months)</h4><div class="analytics-chart-wrap"><canvas id="farmerRevenueChart"></canvas></div></div>
+                    <div class="analytics-chart-card"><h4>Orders by Status</h4><div class="analytics-chart-wrap"><canvas id="farmerOrdersStatusChart"></canvas></div></div>
+                </div>
+                <div class="analytics-table-card"><h4>Views by Listing</h4><div id="farmerViewsTable"></div></div>
+            `;
+        }
+        if (isBuyer) {
+            html += `
+                <h3 style="${isFarmer ? 'margin-top:2.5rem;' : ''}"><i data-lucide="shopping-bag"></i> As a Buyer</h3>
+                <div class="analytics-kpi-grid" id="buyerKpiGrid"></div>
+                <div class="analytics-charts-grid">
+                    <div class="analytics-chart-card"><h4>Spending (last 6 months)</h4><div class="analytics-chart-wrap"><canvas id="buyerSpendingChart"></canvas></div></div>
+                    <div class="analytics-chart-card"><h4>Orders by Status</h4><div class="analytics-chart-wrap"><canvas id="buyerOrdersStatusChart"></canvas></div></div>
+                </div>
+            `;
+        }
+        panel.innerHTML = html;
+
+        const { labels, keys } = lastNMonthsLabels(6);
+
+        if (isFarmer) {
+            const completed = sales.filter((o) => o.status === 'completed');
+            const totalRevenue = completed.reduce((s, o) => s + (o.subtotal || 0), 0);
+            const totalViews = myCrops.reduce((s, c) => s + (c.view_count || 0), 0);
+            const activeListings = myCrops.filter((c) => c.status === 'approved').length;
+            document.getElementById('farmerKpiGrid').innerHTML = [
+                analyticsKpiCardHtml('banknote', 'Total Revenue', `SLLE ${totalRevenue.toLocaleString()}`),
+                analyticsKpiCardHtml('package', 'Total Orders', sales.length),
+                analyticsKpiCardHtml('eye', 'Total Views', totalViews),
+                analyticsKpiCardHtml('store', 'Active Listings', activeListings)
+            ].join('');
+            renderLineChart('farmerRevenueChart', labels, [{ label: 'Revenue (SLLE)', data: bucketByMonth(completed, 'created_at', keys, (o) => o.subtotal || 0), borderColor: '#16a34a', backgroundColor: '#16a34a' }]);
+            renderDoughnutChart('farmerOrdersStatusChart', ORDER_STATUS_CHART_LABELS, ORDER_STATUS_ALL.map((s) => sales.filter((o) => o.status === s).length), ORDER_STATUS_CHART_COLORS);
+            const viewsSorted = [...myCrops].sort((a, b) => (b.view_count || 0) - (a.view_count || 0)).slice(0, 8);
+            document.getElementById('farmerViewsTable').innerHTML = viewsSorted.length
+                ? `<table class="analytics-table"><tbody>${viewsSorted.map((c) => `<tr><td>${escapeHtml(c.name || 'Listing')}</td><td>${(c.view_count || 0).toLocaleString()} views</td></tr>`).join('')}</tbody></table>`
+                : '<p class="text-muted">No views yet.</p>';
+        }
+
+        if (isBuyer) {
+            const completedPurchases = purchases.filter((o) => o.status === 'completed');
+            const totalSpent = completedPurchases.reduce((s, o) => s + (o.subtotal || 0), 0);
+            const activePreorders = purchases.filter((o) => ['pending', 'confirmed', 'ready'].includes(o.status)).length;
+            document.getElementById('buyerKpiGrid').innerHTML = [
+                analyticsKpiCardHtml('wallet', 'Total Spent', `SLLE ${totalSpent.toLocaleString()}`),
+                analyticsKpiCardHtml('shopping-bag', 'Total Orders', purchases.length),
+                analyticsKpiCardHtml('clock', 'Active Pre-Orders', activePreorders)
+            ].join('');
+            renderLineChart('buyerSpendingChart', labels, [{ label: 'Spending (SLLE)', data: bucketByMonth(completedPurchases, 'created_at', keys, (o) => o.subtotal || 0), borderColor: '#2563eb', backgroundColor: '#2563eb' }]);
+            renderDoughnutChart('buyerOrdersStatusChart', ORDER_STATUS_CHART_LABELS, ORDER_STATUS_ALL.map((s) => purchases.filter((o) => o.status === s).length), ORDER_STATUS_CHART_COLORS);
+        }
+
+        if (window.lucide) lucide.createIcons();
+    } catch (err) {
+        console.error('Failed to load analytics', err);
+        panel.innerHTML = '<p class="text-muted">Could not load analytics right now.</p>';
+    }
+}
+
+// ---- Admin analytics: platform growth + marketplace health ----
+async function renderAdminAnalytics(panel) {
+    panel.innerHTML = '<p class="text-muted">Loading analytics…</p>';
+    const db = window.firebaseDb;
+    const { collection, getDocs } = window.dbFns;
+
+    try {
+        const [usersSnap, cropsSnap, ordersSnap] = await Promise.all([
+            getDocs(collection(db, 'users')),
+            getDocs(collection(db, 'crops')),
+            getDocs(collection(db, 'orders'))
+        ]);
+        const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const crops = cropsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const orders = ordersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        const completedOrders = orders.filter((o) => o.status === 'completed');
+        const gmv = completedOrders.reduce((s, o) => s + (o.subtotal || 0), 0);
+        const activeListings = crops.filter((c) => c.status === 'approved').length;
+
+        panel.innerHTML = `
+            <h3>Platform Analytics</h3>
+            <div class="analytics-kpi-grid">
+                ${analyticsKpiCardHtml('users', 'Total Users', users.length)}
+                ${analyticsKpiCardHtml('store', 'Active Listings', activeListings)}
+                ${analyticsKpiCardHtml('package', 'Total Orders', orders.length)}
+                ${analyticsKpiCardHtml('banknote', 'Completed Revenue (GMV)', `SLLE ${gmv.toLocaleString()}`)}
+            </div>
+            <div class="analytics-charts-grid">
+                <div class="analytics-chart-card analytics-chart-wide"><h4>Platform Growth (last 6 months)</h4><div class="analytics-chart-wrap"><canvas id="adminGrowthChart"></canvas></div></div>
+                <div class="analytics-chart-card"><h4>KYC Funnel</h4><div class="analytics-chart-wrap"><canvas id="adminKycFunnelChart"></canvas></div></div>
+                <div class="analytics-chart-card"><h4>Orders by Status</h4><div class="analytics-chart-wrap"><canvas id="adminOrdersStatusChart"></canvas></div></div>
+                <div class="analytics-chart-card"><h4>Top Crops by Revenue</h4><div class="analytics-chart-wrap"><canvas id="adminTopCropsChart"></canvas></div></div>
+                <div class="analytics-chart-card"><h4>Top Regions</h4><div class="analytics-chart-wrap"><canvas id="adminTopRegionsChart"></canvas></div></div>
+            </div>
+        `;
+
+        const { labels, keys } = lastNMonthsLabels(6);
+        renderLineChart('adminGrowthChart', labels, [
+            { label: 'New Users', data: bucketByMonth(users, 'created_at', keys, () => 1), borderColor: '#2563eb', backgroundColor: '#2563eb' },
+            { label: 'New Listings', data: bucketByMonth(crops, 'created_at', keys, () => 1), borderColor: '#16a34a', backgroundColor: '#16a34a' },
+            { label: 'New Orders', data: bucketByMonth(orders, 'created_at', keys, () => 1), borderColor: '#92400e', backgroundColor: '#92400e' }
+        ]);
+
+        const kycCounts = {
+            Approved: users.filter((u) => u.kyc_status === 'approved').length,
+            Pending: users.filter((u) => u.kyc_status === 'pending').length,
+            Rejected: users.filter((u) => u.kyc_status === 'rejected').length,
+            'Not started': users.filter((u) => !u.kyc_status || u.kyc_status === 'not_started').length
+        };
+        renderDoughnutChart('adminKycFunnelChart', Object.keys(kycCounts), Object.values(kycCounts), ['#16a34a', '#92400e', '#dc2626', '#94a3b8']);
+        renderDoughnutChart('adminOrdersStatusChart', ORDER_STATUS_CHART_LABELS, ORDER_STATUS_ALL.map((s) => orders.filter((o) => o.status === s).length), ORDER_STATUS_CHART_COLORS);
+
+        const revenueByCrop = {};
+        orders.forEach((o) => (o.items || []).forEach((i) => {
+            revenueByCrop[i.name] = (revenueByCrop[i.name] || 0) + (i.price || 0) * (i.quantity || 1);
+        }));
+        const topCrops = Object.entries(revenueByCrop).sort((a, b) => b[1] - a[1]).slice(0, 6);
+        renderBarChart('adminTopCropsChart', topCrops.map((c) => c[0]), topCrops.map((c) => c[1]), '#16a34a');
+
+        const regionCounts = {};
+        crops.forEach((c) => { const loc = c.location || 'Unknown'; regionCounts[loc] = (regionCounts[loc] || 0) + 1; });
+        const topRegions = Object.entries(regionCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+        renderBarChart('adminTopRegionsChart', topRegions.map((r) => r[0]), topRegions.map((r) => r[1]), '#2563eb');
+
+        if (window.lucide) lucide.createIcons();
+    } catch (err) {
+        console.error('Failed to load admin analytics', err);
+        panel.innerHTML = '<p class="text-muted">Could not load analytics right now.</p>';
     }
 }
 
