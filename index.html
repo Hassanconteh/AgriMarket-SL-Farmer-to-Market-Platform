@@ -1002,6 +1002,7 @@
          what was actually causing the slow page loads. The UMD build ships
          all of that pre-bundled into a single ~100KB (gzipped) file. -->
     <script src="https://cdn.jsdelivr.net/npm/lucide@1.24.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script>
         let renderScheduled = false;
         function renderLucideIcons() {
@@ -1642,6 +1643,7 @@
             <div id="ordersTabsContainer" class="auth-tabs orders-tabs">
                 <button class="tab-btn active" id="ordersTabPurchases">Purchases</button>
                 <button class="tab-btn" id="ordersTabSales">Sales <span id="ordersSalesActionBadge" class="notif-badge" hidden>0</span></button>
+                <button class="tab-btn" id="ordersTabAnalytics">Analytics</button>
             </div>
 
             <div id="ordersPurchasesPanel" class="orders-panel">
@@ -1650,6 +1652,7 @@
             <div id="ordersSalesPanel" class="orders-panel" hidden>
                 <div id="ordersSalesList" class="orders-list"><p class="text-muted">Loading…</p></div>
             </div>
+            <div id="ordersAnalyticsPanel" class="orders-panel" hidden></div>
         </main>
     </div>
 
@@ -1879,7 +1882,7 @@
                         <label class="kyc-provider-card" data-provider="orange">
                             <input type="radio" name="kycProvider" value="orange" hidden>
                             <div class="kyc-provider-icon kyc-provider-orange">
-                                <img src="images/orange_money_sl.jpg" alt="Orange Money" onerror="this.parentElement.classList.add('kyc-provider-icon--fallback'); this.replaceWith(Object.assign(document.createElement('span'), {className: 'kyc-provider-icon-fallback', textContent: 'OM'}))">
+                                <img src="assets/icons/orange-money.png" alt="Orange Money" onerror="this.parentElement.classList.add('kyc-provider-icon--fallback'); this.replaceWith(Object.assign(document.createElement('span'), {className: 'kyc-provider-icon-fallback', textContent: 'OM'}))">
                             </div>
                             <div class="kyc-provider-name">Orange Money</div>
                             <div class="kyc-provider-desc">Orange SL</div>
@@ -1888,7 +1891,7 @@
                         <label class="kyc-provider-card" data-provider="africell">
                             <input type="radio" name="kycProvider" value="africell" hidden>
                             <div class="kyc-provider-icon kyc-provider-africell">
-                                <img src="images/afrimoney_sl.jpg" alt="Afrimoney" onerror="this.parentElement.classList.add('kyc-provider-icon--fallback'); this.replaceWith(Object.assign(document.createElement('span'), {className: 'kyc-provider-icon-fallback', textContent: 'AM'}))">
+                                <img src="assets/icons/africell-afrimoney.png" alt="Afrimoney" onerror="this.parentElement.classList.add('kyc-provider-icon--fallback'); this.replaceWith(Object.assign(document.createElement('span'), {className: 'kyc-provider-icon-fallback', textContent: 'AM'}))">
                             </div>
                             <div class="kyc-provider-name">Afrimoney</div>
                             <div class="kyc-provider-desc">Africell SL</div>
@@ -1897,7 +1900,7 @@
                         <label class="kyc-provider-card" data-provider="qcell">
                             <input type="radio" name="kycProvider" value="qcell" hidden>
                             <div class="kyc-provider-icon kyc-provider-qcell">
-                                <img src="images/Qmoney_sl.jpg" alt="Qcell Money" onerror="this.parentElement.classList.add('kyc-provider-icon--fallback'); this.replaceWith(Object.assign(document.createElement('span'), {className: 'kyc-provider-icon-fallback', textContent: 'QM'}))">
+                                <img src="assets/icons/qcell-money.png" alt="Qcell Money" onerror="this.parentElement.classList.add('kyc-provider-icon--fallback'); this.replaceWith(Object.assign(document.createElement('span'), {className: 'kyc-provider-icon-fallback', textContent: 'QM'}))">
                             </div>
                             <div class="kyc-provider-name">Qcell Money</div>
                             <div class="kyc-provider-desc">Qcell SL</div>
@@ -2662,7 +2665,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-analytics.js";
   import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendEmailVerification, setPersistence, browserSessionPersistence, browserLocalPersistence, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup, deleteUser } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, onSnapshot, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  import { getFirestore, collection, getDocs, query, where, orderBy, limit, startAfter, doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, onSnapshot, arrayUnion, arrayRemove, increment } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
   import { getDatabase, ref, set, remove, onValue, onDisconnect, serverTimestamp as rtdbServerTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
   import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
 
@@ -2776,7 +2779,8 @@
         writeBatch,
         onSnapshot,
         arrayUnion,
-        arrayRemove
+        arrayRemove,
+        increment
       };
 
       window.testFirestore = async function () {
