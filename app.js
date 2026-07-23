@@ -10,6 +10,49 @@ const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1574943320219-553eb213
 // actual security boundary.
 const ADMIN_UID = "Hekzmx48mPXukHAcHzQI1Uq7AWW2";
 
+// ===== Roles (multi-level admin access) =====
+// ADMIN_UID above is the permanent root Super Admin — always full access,
+// and can't be demoted through the UI (bootstrapping safety: there must
+// always be at least one admin who can't lock themselves out). Beyond
+// that root account, access is granted via a `role` field on the user's
+// own users/{uid} doc, managed from the Admin Dashboard's "Manage Admins"
+// section:
+//   role: 'super_admin' — same full access as the root admin: site
+//         content, blog posts, crop/KYC management, analytics, AND
+//         managing other admins' roles.
+//   role: 'moderator'   — restricted access: crop listing management,
+//         KYC review, and analytics — but NOT site content/blog posts,
+//         and NOT role management.
+// Cached for the currently signed-in user only; refreshed on sign-in.
+let currentUserRole = null;
+
+async function refreshCurrentUserRole(uid) {
+    if (!uid) { currentUserRole = null; return currentUserRole; }
+    if (uid === ADMIN_UID) { currentUserRole = 'super_admin'; return currentUserRole; }
+    try {
+        const db = window.firebaseDb;
+        const { doc, getDoc } = window.dbFns;
+        const snap = await getDoc(doc(db, 'users', uid));
+        currentUserRole = snap.exists() ? (snap.data().role || null) : null;
+    } catch (err) {
+        console.error('Failed to load user role', err);
+        currentUserRole = null;
+    }
+    return currentUserRole;
+}
+function isSuperAdmin() {
+    return window.firebaseAuth?.currentUser?.uid === ADMIN_UID || currentUserRole === 'super_admin';
+}
+function isModerator() {
+    return currentUserRole === 'moderator';
+}
+function hasAdminDashboardAccess() {
+    return isSuperAdmin() || isModerator();
+}
+window.isSuperAdmin = isSuperAdmin;
+window.isModerator = isModerator;
+window.hasAdminDashboardAccess = hasAdminDashboardAccess;
+
 const landingPage   = document.getElementById('landingPage');
 const dashboardApp  = document.getElementById('dashboardApp');
 const navMenu       = document.getElementById('navMenu');
@@ -317,7 +360,7 @@ function renderListings(listings, append = false) {
         const cropId     = escapeHtml(item.id || '');
 
         const currentUid = window.firebaseAuth?.currentUser?.uid;
-        const isAdminViewing = currentUid === ADMIN_UID;
+        const isAdminViewing = isSuperAdmin();
         // Hide "Message Seller" on your own listing (nothing to message
         // yourself about) and for signed-out visitors (openOrCreateChat
         // requires being signed in anyway).
@@ -1184,7 +1227,7 @@ async function handleAddListingSubmit(e) {
         return;
     }
 
-    const isAdmin = user.uid === ADMIN_UID;
+    const isAdmin = isSuperAdmin();
     if (!isAdmin && !user.emailVerified) {
         triggerToast('Please verify your email before submitting a listing.');
         return;
@@ -2260,8 +2303,8 @@ async function loadProfileView(user) {
     const avatarEl = document.getElementById('profileAvatarLg');
     if (avatarEl) avatarEl.innerHTML = avatarHtml(displayName || user.email || 'User', user.uid, photoUrl);
     document.getElementById('profileHeaderName').textContent = displayName || user.email || 'User';
-    const isAdmin = user.uid === ADMIN_UID;
-    document.getElementById('profileRoleBadge').textContent = isAdmin ? 'Administrator' : 'Member';
+    const isAdmin = isSuperAdmin();
+    document.getElementById('profileRoleBadge').textContent = isAdmin ? 'Administrator' : (isModerator() ? 'Moderator' : 'Member');
 
     // Editable fields
     document.getElementById('profileFullName').value = displayName;
@@ -3338,26 +3381,22 @@ document.getElementById('deleteAccountConfirmBtn')?.addEventListener('click', as
 // ===================================================================
 // ADMIN CONTENT MANAGEMENT
 // ===================================================================
-// Lets the admin (ADMIN_UID) edit, add, or delete almost every piece of
+// Lets Super Admins (the root ADMIN_UID plus anyone promoted via the
+// "Manage Admins" section) edit, add, or delete almost every piece of
 // site copy — hero, about, stats, services, how-it-works, testimonials,
-// CTA, section headers, blog posts, and crop listings — from a UI instead
-// of editing this file directly. Content lives in Firestore under the
-// 'site_content' collection (one doc per section); blog posts and crops
-// already had their own collections and are managed from here too.
+// CTA, section headers, blog posts — from a UI instead of editing this
+// file directly. Content lives in Firestore under the 'site_content'
+// collection (one doc per section); blog posts have their own
+// collection and are managed from here too. Moderators do NOT get this
+// group — see ADMIN_SECTIONS' `roles` field below and the isSuperAdmin()
+// / isModerator() rule functions in firestore.rules.
 //
-// REQUIRED FIRESTORE RULES — add alongside your existing crops/KYC rules:
-//   match /site_content/{docId} {
-//     allow read: if true;
-//     allow write: if request.auth != null && request.auth.uid == ADMIN_UID_VALUE;
-//   }
-//   match /posts/{postId} {
-//     allow read: if true;
-//     allow write: if request.auth != null && request.auth.uid == ADMIN_UID_VALUE;
-//   }
-// (Replace ADMIN_UID_VALUE with the same UID string as the ADMIN_UID
-// constant at the top of this file — Firestore rules can't import JS.)
-// crops/{cropId} write-by-admin rules should already exist alongside your
-// approve/reject logic; if not, mirror the same pattern there.
+// See firestore.rules in the project root for the complete, up-to-date
+// rules — including the role-checking functions (isSuperAdmin(),
+// isModerator()) that both this section and crop/KYC moderation depend
+// on. Don't hand-edit rules based on the snippet that used to be here;
+// it's stale now that access is role-based rather than a single
+// hardcoded UID.
 // ===================================================================
 
 const DEFAULT_SITE_CONTENT = {
@@ -3729,34 +3768,54 @@ async function saveSiteContentDoc(key, data) {
 function adminGenId() { return 'i' + Math.random().toString(36).slice(2, 10); }
 
 // ---- Admin dashboard shell ----
+// `roles` controls sidebar visibility: omitted = visible to both
+// super_admin and moderator. Site content / blog posts / role management
+// stay super_admin-only; crop moderation, KYC review, and analytics are
+// shared with moderators; the Access group (view-as-user, guest preview)
+// is available to both since it's read-only/non-destructive.
 const ADMIN_SECTIONS = [
-    { group: 'Site content', key: 'hero', label: 'Hero banner' },
-    { group: 'Site content', key: 'about', label: 'About & Stats' },
-    { group: 'Site content', key: 'services', label: 'Services grid' },
-    { group: 'Site content', key: 'how_it_works', label: 'How it works' },
-    { group: 'Site content', key: 'testimonials', label: 'Testimonials' },
-    { group: 'Site content', key: 'cta', label: 'CTA banner' },
-    { group: 'Site content', key: 'crops_header', label: 'Crops header' },
-    { group: 'Site content', key: 'blog_header', label: 'Blog header' },
-    { group: 'Site content', key: 'newsletter', label: 'Newsletter box' },
-    { group: 'Site content', key: 'footer', label: 'Footer' },
-    { group: 'Marketplace', key: 'blog_posts', label: 'Blog posts' },
+    { group: 'Site content', key: 'hero', label: 'Hero banner', roles: ['super_admin'] },
+    { group: 'Site content', key: 'about', label: 'About & Stats', roles: ['super_admin'] },
+    { group: 'Site content', key: 'services', label: 'Services grid', roles: ['super_admin'] },
+    { group: 'Site content', key: 'how_it_works', label: 'How it works', roles: ['super_admin'] },
+    { group: 'Site content', key: 'testimonials', label: 'Testimonials', roles: ['super_admin'] },
+    { group: 'Site content', key: 'cta', label: 'CTA banner', roles: ['super_admin'] },
+    { group: 'Site content', key: 'crops_header', label: 'Crops header', roles: ['super_admin'] },
+    { group: 'Site content', key: 'blog_header', label: 'Blog header', roles: ['super_admin'] },
+    { group: 'Site content', key: 'newsletter', label: 'Newsletter box', roles: ['super_admin'] },
+    { group: 'Site content', key: 'footer', label: 'Footer', roles: ['super_admin'] },
+    { group: 'Marketplace', key: 'blog_posts', label: 'Blog posts', roles: ['super_admin'] },
     { group: 'Marketplace', key: 'crops_manage', label: 'Manage crops' },
     { group: 'Marketplace', key: 'kyc', label: 'KYC requests' },
-    { group: 'Insights', key: 'analytics', label: 'Analytics' }
+    { group: 'Insights', key: 'analytics', label: 'Analytics' },
+    { group: 'Access', key: 'view_as_user', label: 'View as User' },
+    { group: 'Access', key: 'guest_preview', label: 'Guest Preview' },
+    { group: 'Access', key: 'admins', label: 'Manage Admins', roles: ['super_admin'] }
 ];
+function adminSectionAllowed(section) {
+    if (!section.roles) return true;
+    if (section.roles.includes('super_admin') && isSuperAdmin()) return true;
+    if (section.roles.includes('moderator') && isModerator()) return true;
+    return false;
+}
 
 function showAdminDashboardView() {
+    if (!hasAdminDashboardAccess()) {
+        triggerToast("You don't have access to the admin dashboard.");
+        return;
+    }
     document.getElementById('landingPage').style.display = 'none';
     document.getElementById('landingSections').style.display = 'none';
     document.getElementById('landingNav').style.display = 'none';
     document.getElementById('dashboardApp').style.display = 'none';
     document.getElementById('profileView')?.style && (document.getElementById('profileView').style.display = 'none');
+    document.getElementById('ordersView')?.style && (document.getElementById('ordersView').style.display = 'none');
     const view = document.getElementById('adminDashboardApp');
     view.style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
     renderAdminSidebar();
-    openAdminSection('hero');
+    const firstAllowed = ADMIN_SECTIONS.find((s) => adminSectionAllowed(s));
+    if (firstAllowed) openAdminSection(firstAllowed.key);
 }
 window.showAdminDashboardView = showAdminDashboardView;
 
@@ -3771,7 +3830,7 @@ function renderAdminSidebar() {
     if (!nav) return;
     let currentGroup = '';
     let html = '';
-    ADMIN_SECTIONS.forEach((s) => {
+    ADMIN_SECTIONS.filter(adminSectionAllowed).forEach((s) => {
         if (s.group !== currentGroup) {
             currentGroup = s.group;
             html += `<div class="admin-sidebar-group">${escapeHtml(currentGroup)}</div>`;
@@ -3791,6 +3850,11 @@ function setActiveAdminSidebarItem(key) {
 }
 
 function openAdminSection(key) {
+    const section = ADMIN_SECTIONS.find((s) => s.key === key);
+    if (section && !adminSectionAllowed(section)) {
+        triggerToast("You don't have access to this section.");
+        return;
+    }
     setActiveAdminSidebarItem(key);
     const panel = document.getElementById('adminPanelContent');
     if (!panel) return;
@@ -3800,6 +3864,9 @@ function openAdminSection(key) {
     if (key === 'blog_posts') return renderBlogPostsEditor(panel);
     if (key === 'crops_manage') return renderCropsManageEditor(panel);
     if (key === 'analytics') return renderAdminAnalytics(panel);
+    if (key === 'admins') return renderManageAdminsPanel(panel);
+    if (key === 'view_as_user') return renderViewAsUserPanel(panel);
+    if (key === 'guest_preview') return enterGuestPreview();
     if (key === 'kyc') {
         panel.innerHTML = `
             <h3>KYC verification requests</h3>
@@ -4818,6 +4885,209 @@ async function renderAdminAnalytics(panel) {
     }
 }
 
+// ===== Manage Admins (Super Admin only) =====
+// Grants/revokes 'moderator' or 'super_admin' via a `role` field on the
+// target user's own users/{uid} doc. The root ADMIN_UID can never be
+// changed here — it's not looked up by search, and setUserRole() refuses
+// to touch it even if called directly.
+async function renderManageAdminsPanel(panel) {
+    panel.innerHTML = `
+        <div class="admin-section-header">
+            <h3>Manage Admins</h3>
+            <span class="text-muted">Grant or revoke Moderator / Super Admin access by email.</span>
+        </div>
+        <div class="form-group">
+            <label>Find a user by email</label>
+            <div style="display:flex; gap:0.5rem;">
+                <input type="email" id="adminGrantEmailInput" placeholder="user@example.com" style="flex:1;">
+                <button type="button" class="btn-blue" id="adminGrantSearchBtn">Search</button>
+            </div>
+        </div>
+        <div id="adminGrantSearchResult"></div>
+        <h4 style="margin-top:2rem; margin-bottom:0.75rem; font-size:0.9rem;">Current admins</h4>
+        <div id="adminCurrentAdminsList" class="admin-item-list"><p class="text-muted">Loading…</p></div>
+    `;
+
+    document.getElementById('adminGrantSearchBtn').addEventListener('click', async () => {
+        const email = document.getElementById('adminGrantEmailInput').value.trim().toLowerCase();
+        if (!email) return;
+        const resultEl = document.getElementById('adminGrantSearchResult');
+        resultEl.innerHTML = '<p class="text-muted">Searching…</p>';
+        const db = window.firebaseDb;
+        const { collection, query, where, getDocs } = window.dbFns;
+        try {
+            const snap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+            if (snap.empty) {
+                resultEl.innerHTML = '<p class="text-muted">No user found with that email.</p>';
+                return;
+            }
+            const u = { id: snap.docs[0].id, ...snap.docs[0].data() };
+            if (u.id === ADMIN_UID) {
+                resultEl.innerHTML = '<p class="text-muted">This is the root admin account — already has full access and can\'t be changed here.</p>';
+                return;
+            }
+            const currentRole = u.role || null;
+            resultEl.innerHTML = `
+                <div class="admin-item-row">
+                    <span>${escapeHtml(u.full_name || u.email)} <span class="text-muted">— ${escapeHtml(u.email)}${currentRole ? ` (currently ${escapeHtml(currentRole === 'super_admin' ? 'Super Admin' : 'Moderator')})` : ''}</span></span>
+                    <div class="admin-item-row-actions">
+                        <button type="button" class="btn-outline" data-grant-role="moderator">Make Moderator</button>
+                        <button type="button" class="btn-blue" data-grant-role="super_admin">Make Super Admin</button>
+                        ${currentRole ? `<button type="button" class="btn-delete" data-grant-role="">Revoke</button>` : ''}
+                    </div>
+                </div>
+            `;
+            resultEl.querySelectorAll('[data-grant-role]').forEach((btn) => {
+                btn.addEventListener('click', () => setUserRole(u.id, btn.getAttribute('data-grant-role') || null));
+            });
+        } catch (err) {
+            console.error('Failed to search user', err);
+            resultEl.innerHTML = '<p class="text-muted">Search failed.</p>';
+        }
+    });
+
+    await loadCurrentAdminsList();
+}
+
+async function loadCurrentAdminsList() {
+    const listEl = document.getElementById('adminCurrentAdminsList');
+    if (!listEl) return;
+    const db = window.firebaseDb;
+    const { collection, query, where, getDocs } = window.dbFns;
+    try {
+        const snap = await getDocs(query(collection(db, 'users'), where('role', 'in', ['moderator', 'super_admin'])));
+        const admins = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        listEl.innerHTML = admins.length
+            ? admins.map((u) => `
+                <div class="admin-item-row">
+                    <span>${escapeHtml(u.full_name || u.email)} <span class="text-muted">— ${escapeHtml(u.role === 'super_admin' ? 'Super Admin' : 'Moderator')}</span></span>
+                    <div class="admin-item-row-actions"><button type="button" class="btn-delete" data-revoke-uid="${u.id}">Revoke</button></div>
+                </div>
+            `).join('')
+            : '<p class="text-muted">No additional admins yet — just the root account.</p>';
+        listEl.querySelectorAll('[data-revoke-uid]').forEach((btn) => {
+            btn.addEventListener('click', () => setUserRole(btn.getAttribute('data-revoke-uid'), null));
+        });
+    } catch (err) {
+        console.error('Failed to load admins list', err);
+        listEl.innerHTML = '<p class="text-muted">Could not load admins.</p>';
+    }
+}
+
+async function setUserRole(uid, role) {
+    if (uid === ADMIN_UID) { triggerToast('The root admin account cannot be changed.'); return; }
+    if (!role && !window.confirm("Revoke this user's admin access?")) return;
+    const db = window.firebaseDb;
+    const { doc, setDoc } = window.dbFns;
+    try {
+        await setDoc(doc(db, 'users', uid), { role: role || null }, { merge: true });
+        triggerToast(role ? `Granted ${role === 'super_admin' ? 'Super Admin' : 'Moderator'} access.` : 'Access revoked.');
+        renderManageAdminsPanel(document.getElementById('adminPanelContent'));
+    } catch (err) {
+        console.error('Failed to update role', err);
+        triggerToast(mapFirebaseError(err));
+    }
+}
+
+// ===== View as User (Super Admin + Moderator) =====
+// A read-only preview of a specific user's account — profile, KYC
+// status, their listings, cart, and order history — for support and
+// troubleshooting. Deliberately NOT real impersonation: nothing here
+// can send a message, place an order, or edit anything as that user.
+// That's an intentional safety choice, not a limitation to work around.
+async function renderViewAsUserPanel(panel) {
+    panel.innerHTML = `
+        <div class="admin-section-header">
+            <h3>View as User</h3>
+            <span class="text-muted">Read-only preview for support/troubleshooting — no actions are taken on their behalf.</span>
+        </div>
+        <div class="form-group">
+            <label>Find a user by email</label>
+            <div style="display:flex; gap:0.5rem;">
+                <input type="email" id="viewAsEmailInput" placeholder="user@example.com" style="flex:1;">
+                <button type="button" class="btn-blue" id="viewAsSearchBtn">Preview</button>
+            </div>
+        </div>
+        <div id="viewAsResult"></div>
+    `;
+    const runSearch = () => {
+        const email = document.getElementById('viewAsEmailInput').value.trim().toLowerCase();
+        if (email) loadUserPreview(email);
+    };
+    document.getElementById('viewAsSearchBtn').addEventListener('click', runSearch);
+    document.getElementById('viewAsEmailInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } });
+}
+
+async function loadUserPreview(email) {
+    const resultEl = document.getElementById('viewAsResult');
+    resultEl.innerHTML = '<p class="text-muted">Loading…</p>';
+    const db = window.firebaseDb;
+    const { collection, query, where, getDocs, doc, getDoc } = window.dbFns;
+    try {
+        const userSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+        if (userSnap.empty) { resultEl.innerHTML = '<p class="text-muted">No user found with that email.</p>'; return; }
+        const u = { id: userSnap.docs[0].id, ...userSnap.docs[0].data() };
+
+        const [cropsSnap, cartSnap, purchasesSnap, salesSnap] = await Promise.all([
+            getDocs(query(collection(db, 'crops'), where('submitted_by', '==', u.id))),
+            getDoc(doc(db, 'carts', u.id)).catch(() => null),
+            getDocs(query(collection(db, 'orders'), where('buyer_uid', '==', u.id))),
+            getDocs(query(collection(db, 'orders'), where('farmer_uid', '==', u.id)))
+        ]);
+        const crops = cropsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const cartItems = (cartSnap && cartSnap.exists && cartSnap.exists()) ? (cartSnap.data().items || []) : [];
+        const purchases = purchasesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const sales = salesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        resultEl.innerHTML = `
+            <div class="view-as-banner"><i data-lucide="eye"></i> Read-only preview of ${escapeHtml(u.full_name || u.email)}'s account.</div>
+            <div class="analytics-kpi-grid">
+                ${analyticsKpiCardHtml('calendar', 'Member since', u.created_at ? new Date(u.created_at).toLocaleDateString() : '—')}
+                ${analyticsKpiCardHtml('shield-check', 'KYC status', (u.kyc_status || 'not started').replace('_', ' '))}
+                ${analyticsKpiCardHtml('store', 'Listings', crops.length)}
+                ${analyticsKpiCardHtml('shopping-cart', 'Cart items', cartItems.length)}
+            </div>
+            <div class="admin-item-list" style="margin-bottom:1.5rem;">
+                <div class="admin-item-row"><span>Email</span><span class="text-muted">${escapeHtml(u.email || '—')}</span></div>
+                <div class="admin-item-row"><span>Payment provider</span><span class="text-muted">${escapeHtml(u.kyc_provider ? (KYC_PROVIDERS[u.kyc_provider]?.label || u.kyc_provider) : '—')}</span></div>
+            </div>
+            <h4 style="font-size:0.9rem; margin-bottom:0.5rem;">Listings (${crops.length})</h4>
+            <div class="admin-item-list" style="margin-bottom:1.5rem;">${crops.length ? crops.map((c) => `<div class="admin-item-row"><span>${escapeHtml(c.name || 'Listing')}</span><span class="text-muted">${escapeHtml(c.status || '')}</span></div>`).join('') : '<p class="text-muted">No listings.</p>'}</div>
+            <h4 style="font-size:0.9rem; margin-bottom:0.5rem;">Purchases (${purchases.length})</h4>
+            <div class="orders-list" style="margin-bottom:1.5rem;">${purchases.length ? purchases.map((o) => `<div class="order-card"><div class="order-card-header">${orderStatusBadgeHtml(o.status)}</div><div class="order-card-items">${orderItemsSummary(o.items)}</div></div>`).join('') : '<p class="text-muted">No purchases.</p>'}</div>
+            <h4 style="font-size:0.9rem; margin-bottom:0.5rem;">Sales (${sales.length})</h4>
+            <div class="orders-list">${sales.length ? sales.map((o) => `<div class="order-card"><div class="order-card-header">${orderStatusBadgeHtml(o.status)}</div><div class="order-card-items">${orderItemsSummary(o.items)}</div></div>`).join('') : '<p class="text-muted">No sales.</p>'}</div>
+        `;
+        if (window.lucide) lucide.createIcons();
+    } catch (err) {
+        console.error('Failed to load user preview', err);
+        resultEl.innerHTML = '<p class="text-muted">Could not load this user\'s data.</p>';
+    }
+}
+
+// ===== Guest Preview (Super Admin + Moderator) =====
+// Shows the public landing page exactly as a signed-out visitor would
+// see it, without actually signing out — the admin session stays
+// intact underneath. A persistent banner makes it obvious this is a
+// preview and offers one click back to the dashboard.
+function enterGuestPreview() {
+    document.getElementById('adminDashboardApp').style.display = 'none';
+    document.getElementById('dashboardApp').style.display = 'none';
+    document.getElementById('profileView')?.style && (document.getElementById('profileView').style.display = 'none');
+    document.getElementById('ordersView')?.style && (document.getElementById('ordersView').style.display = 'none');
+    document.getElementById('landingNav').style.display = 'flex';
+    document.getElementById('landingPage').style.display = 'flex';
+    document.getElementById('landingSections').style.display = 'block';
+    document.getElementById('guestPreviewBanner').hidden = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function exitGuestPreview() {
+    document.getElementById('guestPreviewBanner').hidden = true;
+    showAdminDashboardView();
+}
+window.exitGuestPreview = exitGuestPreview;
+document.getElementById('exitGuestPreviewBtn')?.addEventListener('click', () => exitGuestPreview());
+
 async function initApp() {
     try {
         await waitForFirebase();
@@ -4866,7 +5136,8 @@ async function initApp() {
     async function renderAuthedNav(user) {
         const firstName = escapeHtml(await getFirstName(user));
         const photoUrl = await getAvatarPhotoUrl(user);
-        const isAdmin = user.uid === ADMIN_UID;
+        const isAdmin = isSuperAdmin();
+        const isMod = !isAdmin && isModerator();
         navMenu.innerHTML = `
             ${!isAdmin ? '<button id="navSupportBtn" class="btn-outline" title="Contact Support"><i data-lucide="headset"></i> Support</button>' : ''}
             ${!isAdmin ? `
@@ -4903,6 +5174,7 @@ async function initApp() {
             <button id="navAdminBtn" class="btn-outline" type="button" title="Admin Dashboard">
                 <i data-lucide="settings"></i> Admin
             </button>` : ''}
+            ${isMod ? `<button id="navAdminBtn" class="btn-outline" type="button" title="Moderator Dashboard"><i data-lucide="shield-check"></i> Moderate</button>` : ''}
             ${!isAdmin ? '<button id="navOrdersBtn" class="btn-outline" type="button" title="My Orders"><i data-lucide="package"></i> Orders</button>' : ''}
             <button id="navDashboardBtn" class="btn-outline" title="Back to Marketplace"><i data-lucide="store"></i> Marketplace</button>
             <button id="navProfileBtn" class="nav-profile-pill" type="button" title="Your profile">
@@ -4962,6 +5234,7 @@ async function initApp() {
             landingPage.style.display = 'none';
             dashboardApp.style.display = 'block';
 
+            await refreshCurrentUserRole(user.uid);
             await renderAuthedNav(user);
 
             // Refresh emailVerified/uid off the server rather than the
@@ -4969,7 +5242,7 @@ async function initApp() {
             // in another tab immediately sees the right buttons here too.
             try { await user.reload(); } catch (err) { console.warn('Could not refresh user before role check', err); }
 
-            const isAdmin = user.uid === ADMIN_UID;
+            const isAdmin = isSuperAdmin();
             const isVerifiedFarmer = !isAdmin && user.emailVerified;
 
             // The "Add Listing" button serves two roles depending on who's
@@ -5022,6 +5295,7 @@ async function initApp() {
             currentNotifications = [];
             readNotificationIdsCache = new Set();
             cartCache = { items: [] };
+            currentUserRole = null;
             navMenu.innerHTML = `<button id="navLoginBtn" class="btn-outline">Log In</button>`;
             document.getElementById('navLoginBtn').addEventListener('click', () => openModal('login'));
 
@@ -5163,7 +5437,7 @@ async function initApp() {
     // Add Listing modal (admin-only — button itself stays hidden for
     // everyone else, see the ADMIN_UID check in the auth-state observer)
     addListingBtn?.addEventListener('click', () => {
-        const isAdmin = window.firebaseAuth?.currentUser?.uid === ADMIN_UID;
+        const isAdmin = isSuperAdmin();
         if (isAdmin) {
             addListingModalTitle.textContent = 'Add Listing';
             addListingModalSubtitle.textContent = "Creates the public listing and the farmer's contact info together, so contact details are never missing.";
