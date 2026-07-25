@@ -2133,6 +2133,53 @@
         </div>
     </div>
 
+    <div id="cookieConsentBanner" class="cookie-consent-banner" hidden>
+        <div class="cookie-consent-inner">
+            <div class="cookie-consent-icon"><i data-lucide="cookie"></i></div>
+            <p>We use essential cookies to keep you signed in and remember your cart. With your permission, we'd also like to use analytics cookies to help us improve AgriMarket SL. See our <a href="#" onclick="showPage('cookies'); return false;">Cookie Policy</a> for details.</p>
+            <div class="cookie-consent-actions">
+                <button type="button" class="btn-outline" id="cookieCustomizeBtn">Customize</button>
+                <button type="button" class="btn-outline" id="cookieRejectBtn">Reject Non-Essential</button>
+                <button type="button" class="btn-primary" id="cookieAcceptBtn">Accept All</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="cookieSettingsModal" class="modal-overlay">
+        <div class="modal-content float-in" style="max-width: 460px; text-align: left;">
+            <button class="close-btn" id="closeCookieSettingsModal" aria-label="Close"><i data-lucide="x"></i></button>
+            <h3 class="kyc-modal-title"><i data-lucide="cookie"></i> Cookie Settings</h3>
+            <p class="text-muted" style="margin-bottom: 1.25rem;">Choose which cookies you're comfortable with. You can change this anytime from the "Cookie Settings" link in the footer.</p>
+
+            <div class="cookie-category-row">
+                <div>
+                    <div class="cookie-category-title">Essential</div>
+                    <div class="cookie-category-desc">Required to sign in, keep your cart, and use core features. Always on.</div>
+                </div>
+                <label class="cookie-toggle cookie-toggle-locked">
+                    <input type="checkbox" checked disabled>
+                    <span class="cookie-toggle-slider"></span>
+                </label>
+            </div>
+
+            <div class="cookie-category-row">
+                <div>
+                    <div class="cookie-category-title">Analytics</div>
+                    <div class="cookie-category-desc">Lets us use Google Analytics to understand how AgriMarket SL is used, so we can improve it. Optional.</div>
+                </div>
+                <label class="cookie-toggle">
+                    <input type="checkbox" id="cookieAnalyticsToggle">
+                    <span class="cookie-toggle-slider"></span>
+                </label>
+            </div>
+
+            <div style="display:flex; gap:0.75rem; margin-top:1.5rem;">
+                <button type="button" class="btn-blue" id="cookieSavePrefsBtn">Save Preferences</button>
+                <button type="button" class="btn-outline" id="cookieSettingsCancelBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toastContainer" class="toast-container"></div>
 
     <div id="staticPageContainer" class="container" style="display: none; padding-top: 4rem; min-height: 70vh;">
@@ -2209,6 +2256,8 @@
             <div class="footer-bottom-links">
                 <a href="#" onclick="showPage('privacy'); return false;">Privacy Policy</a>
                 <a href="#" onclick="showPage('terms'); return false;">Terms of Service</a>
+                <a href="#" onclick="showPage('cookies'); return false;">Cookie Policy</a>
+                <a href="#" id="footerCookieSettingsLink" onclick="openCookieSettingsModal(); return false;">Cookie Settings</a>
                 <a href="#" onclick="showPage('support'); return false;">Support</a>
                 <a href="#" onclick="showPage('contact'); return false;">Contact Us</a>
             </div>
@@ -2461,6 +2510,21 @@
                 <p>Sunday: Closed</p>
                 <h3>Partnerships</h3>
                 <p>Interested in partnering with AgriMarket SL to expand market access in your region? Email us at <a href="mailto:partnerships@agrimarketsl.com">partnerships@agrimarketsl.com</a></p>
+            `,
+            cookies: `
+                <h2>Cookie Policy</h2>
+                <p>Last updated: July 2026</p>
+                <h3>1. What Are Cookies</h3>
+                <p>Cookies are small text files stored on your device that help websites remember information about your visit, like your preferences and choices.</p>
+                <h3>2. Cookies We Use</h3>
+                <p><strong>Essential cookies</strong> — always on. These keep you signed in, remember items in your cart, and let core site features work. The site cannot function properly without them.</p>
+                <p><strong>Analytics cookies</strong> — optional. If enabled, we use Google Analytics to help us understand how visitors use AgriMarket SL (e.g. which pages are viewed, how long visitors stay) so we can improve the platform. IP addresses are anonymized. No Google Analytics cookies are set unless you opt in, and Google Analytics' own privacy practices apply to any data it collects — see <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</p>
+                <h3>3. Your Choice</h3>
+                <p>You can accept all cookies, reject non-essential ones, or customize your preferences at any time using the "Cookie Settings" link in the footer.</p>
+                <h3>4. Managing Cookies in Your Browser</h3>
+                <p>Most browsers also let you block or delete cookies directly in their settings. Blocking essential cookies may prevent you from signing in or using cart/checkout features.</p>
+                <h3>5. Questions</h3>
+                <p>If you have questions about our use of cookies, contact us at <a href="mailto:support@agrimarketsl.com">support@agrimarketsl.com</a>.</p>
             `
         };
 
@@ -2661,6 +2725,114 @@
             modal.addEventListener('click', function (e) {
                 if (e.target === modal) dismiss();
             });
+        })();
+    </script>
+
+    <script>
+        // Cookie consent: essential cookies are always on (sign-in session,
+        // cart) — this only ever gates the optional 'analytics' category.
+        // Google Analytics (GA4) is loaded ONLY when analytics consent is
+        // true — no gtag script, no _ga/_gid cookies exist at all until
+        // the visitor opts in. See GA_MEASUREMENT_ID below.
+        (function () {
+            const COOKIE_NAME = 'agrimarket_cookie_consent';
+            const COOKIE_MAX_AGE_DAYS = 365;
+
+            // TODO: replace with your real GA4 Measurement ID from
+            // Admin → Data Streams → your web stream, in analytics.google.com.
+            // Looks like "G-XXXXXXXXXX". Analytics silently stays off until
+            // this is filled in — no errors, just no tracking.
+            const GA_MEASUREMENT_ID = 'G-2E0Z3Z88B9';
+            let gaLoaded = false;
+
+            function loadGoogleAnalytics() {
+                if (gaLoaded || !GA_MEASUREMENT_ID || GA_MEASUREMENT_ID === 'G-XXXXXXXXXX') return;
+                gaLoaded = true;
+                const script = document.createElement('script');
+                script.async = true;
+                script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
+                document.head.appendChild(script);
+                window.dataLayer = window.dataLayer || [];
+                function gtag() { window.dataLayer.push(arguments); }
+                window.gtag = gtag;
+                gtag('js', new Date());
+                gtag('config', GA_MEASUREMENT_ID, { anonymize_ip: true });
+            }
+            function disableGoogleAnalytics() {
+                // Can't "unload" a script already in the page, but we can
+                // stop it from sending anything further and clear its
+                // cookies so no tracking identifiers persist.
+                window[`ga-disable-${GA_MEASUREMENT_ID}`] = true;
+                ['_ga', `_ga_${GA_MEASUREMENT_ID.replace('G-', '')}`, '_gid', '_gat'].forEach((name) => {
+                    document.cookie = `${name}=;max-age=0;path=/`;
+                });
+            }
+
+            function setCookie(name, value, days) {
+                const maxAge = days * 24 * 60 * 60;
+                document.cookie = `${name}=${encodeURIComponent(value)};max-age=${maxAge};path=/;SameSite=Lax`;
+            }
+            function getCookie(name) {
+                const match = document.cookie.split('; ').find((row) => row.startsWith(name + '='));
+                return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null;
+            }
+            function readConsent() {
+                const raw = getCookie(COOKIE_NAME);
+                if (!raw) return null;
+                try { return JSON.parse(raw); } catch (err) { return null; }
+            }
+            function saveConsent(analytics) {
+                setCookie(COOKIE_NAME, JSON.stringify({ essential: true, analytics: !!analytics, saved_at: new Date().toISOString() }), COOKIE_MAX_AGE_DAYS);
+                if (analytics) loadGoogleAnalytics();
+                else disableGoogleAnalytics();
+            }
+            window.cookieConsent = function () {
+                return readConsent() || { essential: true, analytics: false };
+            };
+
+            const banner = document.getElementById('cookieConsentBanner');
+            const modal = document.getElementById('cookieSettingsModal');
+            const analyticsToggle = document.getElementById('cookieAnalyticsToggle');
+
+            function hideBanner() { banner.hidden = true; }
+            function closeSettingsModal() { modal.classList.remove('active'); }
+
+            window.openCookieSettingsModal = function () {
+                const current = readConsent() || { analytics: false };
+                analyticsToggle.checked = !!current.analytics;
+                modal.classList.add('active');
+                if (window.lucide) lucide.createIcons();
+            };
+
+            document.addEventListener('DOMContentLoaded', function () {
+                const existing = readConsent();
+                if (!existing) {
+                    setTimeout(() => { banner.hidden = false; if (window.lucide) lucide.createIcons(); }, 600);
+                } else if (existing.analytics) {
+                    loadGoogleAnalytics();
+                }
+            });
+
+            document.getElementById('cookieAcceptBtn').addEventListener('click', function () {
+                saveConsent(true);
+                hideBanner();
+            });
+            document.getElementById('cookieRejectBtn').addEventListener('click', function () {
+                saveConsent(false);
+                hideBanner();
+            });
+            document.getElementById('cookieCustomizeBtn').addEventListener('click', function () {
+                window.openCookieSettingsModal();
+            });
+            document.getElementById('cookieSavePrefsBtn').addEventListener('click', function () {
+                saveConsent(analyticsToggle.checked);
+                closeSettingsModal();
+                hideBanner();
+                if (typeof triggerToast === 'function') triggerToast('Cookie preferences saved.');
+            });
+            document.getElementById('cookieSettingsCancelBtn').addEventListener('click', closeSettingsModal);
+            document.getElementById('closeCookieSettingsModal').addEventListener('click', closeSettingsModal);
+            modal.addEventListener('click', function (e) { if (e.target === modal) closeSettingsModal(); });
         })();
     </script>
 
